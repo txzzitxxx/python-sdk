@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "mcp-python"
+name = "mcp"
 version = "0.6.1"
 description = "Model Context Protocol implementation for Python"
 readme = "README.md"
