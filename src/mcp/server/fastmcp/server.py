@@ -620,7 +620,7 @@ class Context(BaseModel):
         ), "Context is not available outside of a request"
         return await self._fastmcp.read_resource(uri)
 
-    def log(
+    async def log(
         self,
         level: Literal["debug", "info", "warning", "error"],
         message: str,
@@ -635,7 +635,7 @@ class Context(BaseModel):
             logger_name: Optional logger name
             **extra: Additional structured data to include
         """
-        self.request_context.session.send_log_message(
+        await self.request_context.session.send_log_message(
             level=level, data=message, logger=logger_name
         )
 
@@ -659,18 +659,18 @@ class Context(BaseModel):
         return self.request_context.session
 
     # Convenience methods for common log levels
-    def debug(self, message: str, **extra: Any) -> None:
+    async def debug(self, message: str, **extra: Any) -> None:
         """Send a debug log message."""
-        self.log("debug", message, **extra)
+        await self.log("debug", message, **extra)
 
-    def info(self, message: str, **extra: Any) -> None:
+    async def info(self, message: str, **extra: Any) -> None:
         """Send an info log message."""
-        self.log("info", message, **extra)
+        await self.log("info", message, **extra)
 
-    def warning(self, message: str, **extra: Any) -> None:
+    async def warning(self, message: str, **extra: Any) -> None:
         """Send a warning log message."""
-        self.log("warning", message, **extra)
+        await self.log("warning", message, **extra)
 
-    def error(self, message: str, **extra: Any) -> None:
+    async def error(self, message: str, **extra: Any) -> None:
         """Send an error log message."""
-        self.log("error", message, **extra)
+        await self.log("error", message, **extra)

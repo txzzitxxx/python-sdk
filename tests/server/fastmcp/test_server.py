@@ -521,11 +521,11 @@ class TestContextInjection:
         """Test that context logging methods work."""
         mcp = FastMCP()
 
-        def logging_tool(msg: str, ctx: Context) -> str:
-            ctx.debug("Debug message")
-            ctx.info("Info message")
-            ctx.warning("Warning message")
-            ctx.error("Error message")
+        async def logging_tool(msg: str, ctx: Context) -> str:
+            await ctx.debug("Debug message")
+            await ctx.info("Info message")
+            await ctx.warning("Warning message")
+            await ctx.error("Error message")
             return f"Logged messages for {msg}"
 
         mcp.add_tool(logging_tool)
@@ -563,8 +563,8 @@ class TestContextInjection:
 
         @mcp.tool()
         async def tool_with_resource(ctx: Context) -> str:
-            data = await ctx.read_resource("test://data")
-            return f"Read resource: {data}"
+            data, mime_type = await ctx.read_resource("test://data")
+            return f"Read resource: {data} with mime type {mime_type}"
 
         async with client_session(mcp._mcp_server) as client:
             result = await client.call_tool("tool_with_resource", {})
