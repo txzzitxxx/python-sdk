@@ -21,7 +21,7 @@ class SamplingFnT(Protocol):
 class ListRootsFnT(Protocol):
     async def __call__(
         self, context: RequestContext["ClientSession", Any]
-    ) -> types.ListRootsResult |  types.ErrorData: ...    
+    ) -> types.ListRootsResult | types.ErrorData: ...
 
 
 async def _default_sampling_callback(
@@ -36,7 +36,7 @@ async def _default_sampling_callback(
 
 async def _default_list_roots_callback(
     context: RequestContext["ClientSession", Any],
-) -> types.ListRootsResult |  types.ErrorData:
+) -> types.ListRootsResult | types.ErrorData:
     return types.ErrorData(
         code=types.INVALID_REQUEST,
         message="List roots not supported",
@@ -317,7 +317,7 @@ class ClientSession(
                     response = await self._list_roots_callback(ctx)
                     client_response = ClientResponse.validate_python(response)
                     await responder.respond(client_response)
-                    
+
             case types.PingRequest():
                 with responder:
                     return await responder.respond(
