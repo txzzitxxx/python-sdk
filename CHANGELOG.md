@@ -1,6 +1,6 @@
 # Changelog
 
-## [1.3.0rc1] - 2025-02-13
+## [1.3.0] - 2025-02-20
 
 ### Breaking Changes
 
@@ -73,6 +73,16 @@ Added support for the `instructions` field in server initialization, allowing se
 ### Examples
 
 - Added a simple chatbot example client to demonstrate SDK usage ([#98](https://github.com/modelcontextprotocol/python-sdk/pull/98))
+
+### Client Improvements
+
+- Added client support for sampling, list roots, and ping requests ([#218](https://github.com/modelcontextprotocol/python-sdk/pull/218))
+- Added flexible type system for tool result returns ([#222](https://github.com/modelcontextprotocol/python-sdk/pull/222))
+
+### Compatibility and Platform Support
+
+- Updated URL validation to allow file and other nonstandard schemas ([#68fcf92](https://github.com/modelcontextprotocol/python-sdk/commit/68fcf92947f7d02d50340053a72a969d6bb70e1b))
+- Force stdin/stdout encoding to UTF-8 for cross-platform compatibility ([#d92ee8f](https://github.com/modelcontextprotocol/python-sdk/commit/d92ee8feaa5675efddd399f3e8ebe8ed976b84c2))
 
 ### Internal Improvements
 
