@@ -11,7 +11,7 @@ from contextlib import (
     asynccontextmanager,
 )
 from itertools import chain
-from typing import Any, Callable, Generic, Literal, Sequence
+from typing import Any, Callable, Generic, Literal, Optional, Sequence
 
 import anyio
 import pydantic_core
@@ -20,6 +20,9 @@ from pydantic import BaseModel, Field
 from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from mcp.server.auth.provider import OAuthServerProvider
+from mcp.server.auth.router import ClientRegistrationOptions, RevocationOptions
+from mcp.server.auth.types import AuthInfo
 from mcp.server.fastmcp.exceptions import ResourceError
 from mcp.server.fastmcp.prompts import Prompt, PromptManager
 from mcp.server.fastmcp.resources import FunctionResource, Resource, ResourceManager
@@ -89,6 +92,13 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
         Callable[["FastMCP"], AbstractAsyncContextManager[LifespanResultT]] | None
     ) = Field(None, description="Lifespan context manager")
 
+    auth_issuer_url: AnyUrl | None = Field(None, description="Auth issuer URL")
+    auth_service_documentation_url: AnyUrl | None = Field(None, description="Service documentation URL")
+    auth_client_registration_options: ClientRegistrationOptions | None = None
+    auth_revocation_options: RevocationOptions | None = None 
+    auth_required_scopes: list[str] | None = None
+
+
 
 def lifespan_wrapper(
     app: FastMCP,
@@ -104,7 +114,11 @@ def lifespan_wrapper(
 
 class FastMCP:
     def __init__(
-        self, name: str | None = None, instructions: str | None = None, **settings: Any
+        self, 
+        name: str | None = None, 
+        instructions: str | None = None, 
+        auth_provider: OAuthServerProvider | None = None,
+        **settings: Any
     ):
         self.settings = Settings(**settings)
 
@@ -124,6 +138,7 @@ class FastMCP:
         self._prompt_manager = PromptManager(
             warn_on_duplicate_prompts=self.settings.warn_on_duplicate_prompts
         )
+        self._auth_provider = auth_provider
         self.dependencies = self.settings.dependencies
 
         # Set up MCP protocol handlers
@@ -463,10 +478,24 @@ class FastMCP:
         """Run the server using SSE transport."""
         from starlette.applications import Starlette
         from starlette.routing import Mount, Route
+        from starlette.middleware import Middleware
+        from fastapi import FastAPI, Depends
+        
+        # Import auth dependency if needed
+        auth_dependencies = []
+        if self._auth_provider:
+            from mcp.server.auth.middleware.bearer_auth import BearerAuthDependency
+            auth_dependencies = [Depends(BearerAuthDependency(
+                provider=self._auth_provider,
+                required_scopes=self.settings.auth_required_scopes
+            ))]
 
         sse = SseServerTransport("/messages/")
 
         async def handle_sse(request):
+            # Add client ID from auth context into request context if available
+            request_meta = {}
+                
             async with sse.connect_sse(
                 request.scope, request.receive, request._send
             ) as streams:
@@ -476,16 +505,26 @@ class FastMCP:
                     self._mcp_server.create_initialization_options(),
                 )
 
-        starlette_app = Starlette(
-            debug=self.settings.debug,
-            routes=[
-                Route("/sse", endpoint=handle_sse),
-                Mount("/messages/", app=sse.handle_post_message),
-            ],
-        )
+        # Create Starlette app
+        app = FastAPI(debug=self.settings.debug)
+
+        # Add routes with auth dependency if required
+        app.add_api_route("/sse", endpoint=handle_sse, dependencies=auth_dependencies)
+        # TODO: convert this to a handler so it can take a dependency
+        app.mount("/messages/", sse.handle_post_message) # , dependencies=auth_dependencies)
+        
+        # Add auth endpoints if auth provider is configured
+        if self._auth_provider and self.settings.auth_issuer_url:
+            from mcp.server.auth.router import create_auth_router
+            auth_app = create_auth_router(
+                self._auth_provider,
+                self.settings.auth_issuer_url,
+                self.settings.auth_service_documentation_url
+            )
+            app.mount("/", auth_app)
 
         config = uvicorn.Config(
-            starlette_app,
+            app,
             host=self.settings.host,
             port=self.settings.port,
             log_level=self.settings.log_level.lower(),
