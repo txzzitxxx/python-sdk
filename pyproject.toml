@@ -30,6 +30,7 @@ dependencies = [
     "sse-starlette>=1.6.1",
     "pydantic-settings>=2.5.2",
     "uvicorn>=0.23.1",
+    "fastapi",
 ]
 
 [project.optional-dependencies]
@@ -46,7 +47,7 @@ dev-dependencies = [
     "pytest>=8.3.4",
     "ruff>=0.8.5",
     "trio>=0.26.2",
-    "pytest-flakefinder>=1.1.0",
+    "pytest-flakefinder==1.1.0",
     "pytest-xdist>=3.6.1",
 ]
 
