@@ -67,6 +67,9 @@ include = ["src/mcp", "tests"]
 venvPath = "."
 venv = ".venv"
 
+[tool.pytest.ini_options]
+markers = ["anyio"]
+
 [tool.ruff.lint]
 select = ["E", "F", "I"]
 ignore = []

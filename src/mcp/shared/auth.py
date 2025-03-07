@@ -39,8 +39,8 @@ class OAuthClientMetadata(BaseModel):
     Corresponds to OAuthClientMetadataSchema in src/shared/auth.ts
     """
     redirect_uris: List[AnyHttpUrl] = Field(..., min_length=1)
-    token_endpoint_auth_method: Optional[str]
-    grant_types: Optional[List[str]]
+    token_endpoint_auth_method: Optional[str] = None
+    grant_types: Optional[List[str]] = None
     response_types: Optional[List[str]] = None
     client_name: Optional[str] = None
     client_uri: Optional[AnyHttpUrl] = None

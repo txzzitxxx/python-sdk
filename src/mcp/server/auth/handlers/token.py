@@ -7,11 +7,11 @@ Corresponds to TypeScript file: src/server/auth/handlers/token.ts
 import base64
 import hashlib
 import json
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Union
 
-from fastapi import Request, Response
-from pydantic import BaseModel, Field, ValidationError
+from starlette.requests import Request
 from starlette.responses import JSONResponse
+from pydantic import BaseModel, Field, RootModel, TypeAdapter, ValidationError
 
 from mcp.server.auth.errors import (
     InvalidClientError,
@@ -23,37 +23,36 @@ from mcp.server.auth.errors import (
 )
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.shared.auth import OAuthClientInformationFull, OAuthTokens
-from mcp.server.auth.middleware.client_auth import ClientAuthDependency
+from mcp.server.auth.middleware.client_auth import ClientAuthRequest, ClientAuthenticator
+from mcp.server.auth.json_response import PydanticJSONResponse
 
-class AuthorizationCodeRequest(BaseModel):
+class AuthorizationCodeRequest(ClientAuthRequest):
     """
     Model for the authorization code grant request parameters.
     
     Corresponds to AuthorizationCodeExchangeSchema in src/server/auth/handlers/token.ts
     """
-    grant_type: str = Field(..., description="Must be 'authorization_code'")
+    grant_type: Literal["authorization_code"]
     code: str = Field(..., description="The authorization code")
     code_verifier: str = Field(..., description="PKCE code verifier")
-    
-    class Config:
-        extra = "ignore"
 
-
-class RefreshTokenRequest(BaseModel):
+class RefreshTokenRequest(ClientAuthRequest):
     """
     Model for the refresh token grant request parameters.
     
     Corresponds to RefreshTokenExchangeSchema in src/server/auth/handlers/token.ts
     """
-    grant_type: str = Field(..., description="Must be 'refresh_token'")
+    grant_type: Literal["refresh_token"]
     refresh_token: str = Field(..., description="The refresh token")
     scope: Optional[str] = Field(None, description="Optional scope parameter")
-    
-    class Config:
-        extra = "ignore"
 
 
-def create_token_handler(provider: OAuthServerProvider) -> Callable:
+class TokenRequest(RootModel):
+    root: Annotated[Union[AuthorizationCodeRequest, RefreshTokenRequest], Field(discriminator="grant_type")]
+# TokenRequest = RootModel(Annotated[Union[AuthorizationCodeRequest, RefreshTokenRequest], Field(discriminator="grant_type")])
+
+
+def create_token_handler(provider: OAuthServerProvider, client_authenticator: ClientAuthenticator) -> Callable:
     """
     Create a handler for the OAuth 2.0 Token endpoint.
     
@@ -63,74 +62,60 @@ def create_token_handler(provider: OAuthServerProvider) -> Callable:
         provider: The OAuth server provider
         
     Returns:
-        A FastAPI route handler function
+        A Starlette endpoint handler function
     """
     
-    async def token_handler(request: Request, client_auth: OAuthClientInformationFull) -> Response:
+    async def token_handler(request: Request):
         """
         Handler for the OAuth 2.0 Token endpoint.
         
         Args:
-            request: The FastAPI request
+            request: The Starlette request
             
         Returns:
             JSON response with tokens or error
         """
-        params = json.loads(await request.body())
+        # Parse request body as form data or JSON
+        content_type = request.headers.get("Content-Type", "")
 
-        
-        # Check grant_type first to determine which validation model to use
-        if "grant_type" not in params:
-            raise InvalidRequestError("Missing required parameter: grant_type")
-        grant_type = params["grant_type"]
-        
+        try:
+            token_request = TokenRequest.model_validate_json(await request.body()).root
+        except ValidationError as e:
+            raise InvalidRequestError(f"Invalid request body: {e}")
+        client_info = await client_authenticator(token_request)
+    
         tokens: OAuthTokens
         
-        if grant_type == "authorization_code":
-            # Validate authorization code parameters
-            try:
-                code_request = AuthorizationCodeRequest.model_validate(params)
-            except ValidationError as e:
-                raise InvalidRequestError(str(e))
+        match token_request:
+            case AuthorizationCodeRequest():
+                # Verify PKCE code verifier
+                expected_challenge = await provider.challenge_for_authorization_code(
+                    client_info, token_request.code
+                )
+                if expected_challenge is None:
+                    raise InvalidRequestError("Invalid authorization code")
+                
+                # Calculate challenge from verifier
+                sha256 = hashlib.sha256(token_request.code_verifier.encode()).digest()
+                actual_challenge = base64.urlsafe_b64encode(sha256).decode().rstrip("=")
+                
+                if actual_challenge != expected_challenge:
+                    raise InvalidRequestError("code_verifier does not match the challenge")
+                
+                # Exchange authorization code for tokens
+                tokens = await provider.exchange_authorization_code(client_info, token_request.code)
             
-            # Verify PKCE code verifier
-            expected_challenge = await provider.challenge_for_authorization_code(
-                client_auth, code_request.code
-            )
-            if expected_challenge is None:
-                raise InvalidRequestError("Invalid authorization code")
-            
-            # Calculate challenge from verifier
-            sha256 = hashlib.sha256(code_request.code_verifier.encode()).digest()
-            actual_challenge = base64.urlsafe_b64encode(sha256).decode().rstrip("=")
-            
-            if actual_challenge != expected_challenge:
-                raise InvalidRequestError("code_verifier does not match the challenge")
-            
-            # Exchange authorization code for tokens
-            tokens = await provider.exchange_authorization_code(client_auth, code_request.code)
-            
-        elif grant_type == "refresh_token":
-            # Validate refresh token parameters
-            try:
-                refresh_request = RefreshTokenRequest.model_validate(params)
-            except ValidationError as e:
-                raise InvalidRequestError(str(e))
-            
-            # Parse scopes if provided
-            scopes = refresh_request.scope.split(" ") if refresh_request.scope else None
-            
-            # Exchange refresh token for new tokens
-            tokens = await provider.exchange_refresh_token(
-                client_auth, refresh_request.refresh_token, scopes
-            )
-            
-        else:
-            raise InvalidRequestError(
-                f"Unsupported grant_type: {grant_type}"
-            )
+            case RefreshTokenRequest():
+                # Parse scopes if provided
+                scopes = token_request.scope.split(" ") if token_request.scope else None
+                
+                # Exchange refresh token for new tokens
+                tokens = await provider.exchange_refresh_token(
+                    client_info, token_request.refresh_token, scopes
+                )
+
         
-        return JSONResponse(
+        return PydanticJSONResponse(
             content=tokens,
             headers={
                 "Cache-Control": "no-store",

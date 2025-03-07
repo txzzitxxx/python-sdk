@@ -5,8 +5,9 @@ Corresponds to TypeScript file: src/server/auth/handlers/metadata.ts
 """
 
 from typing import Any, Callable, Dict, Optional
-from fastapi import Request, Response
-from starlette.responses import JSONResponse
+
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 
 def create_metadata_handler(metadata: Dict[str, Any]) -> Callable:
@@ -19,7 +20,7 @@ def create_metadata_handler(metadata: Dict[str, Any]) -> Callable:
         metadata: The metadata to return in the response
         
     Returns:
-        A FastAPI route handler function
+        A Starlette endpoint handler function
     """
     
     async def metadata_handler(request: Request) -> Response:
@@ -27,7 +28,7 @@ def create_metadata_handler(metadata: Dict[str, Any]) -> Callable:
         Handler for the OAuth 2.0 Authorization Server Metadata endpoint.
         
         Args:
-            request: The FastAPI request
+            request: The Starlette request
             
         Returns:
             JSON response with the authorization server metadata

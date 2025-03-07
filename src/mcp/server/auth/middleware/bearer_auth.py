@@ -1,28 +1,34 @@
 """
-Bearer token authentication dependency for FastAPI.
+Bearer token authentication middleware for ASGI applications.
 
 Corresponds to TypeScript file: src/server/auth/middleware/bearerAuth.ts
 """
 
 import time
-from typing import List, Optional
+from typing import List, Optional, Callable, Awaitable, cast, Dict, Any
 
-from fastapi import Request, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from starlette.requests import HTTPConnection, Request
+from starlette.exceptions import HTTPException
+from starlette.authentication import AuthCredentials, AuthenticationBackend, AuthenticationError, BaseUser, SimpleUser, UnauthenticatedUser
+from starlette.middleware.authentication import AuthenticationMiddleware
 
 from mcp.server.auth.errors import InsufficientScopeError, InvalidTokenError, OAuthError
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.server.auth.types import AuthInfo
 
 
-class BearerAuthDependency:
+class AuthenticatedUser(SimpleUser):
+    """User with authentication info."""
+    
+    def __init__(self, auth_info: AuthInfo):
+        super().__init__(auth_info.user_id or "anonymous")
+        self.auth_info = auth_info
+        self.scopes = auth_info.scopes
+
+
+class BearerAuthBackend(AuthenticationBackend):
     """
-    Dependency that requires a valid Bearer token in the Authorization header.
-    
-    This will validate the token with the auth provider and return the resulting 
-    auth info.
-    
-    Corresponds to requireBearerAuth in src/server/auth/middleware/bearerAuth.ts
+    Authentication backend that validates Bearer tokens.
     """
     
     def __init__(
@@ -31,7 +37,7 @@ class BearerAuthDependency:
         required_scopes: Optional[List[str]] = None
     ):
         """
-        Initialize the dependency.
+        Initialize the backend.
         
         Args:
             provider: Authentication provider to validate tokens
@@ -39,28 +45,22 @@ class BearerAuthDependency:
         """
         self.provider = provider
         self.required_scopes = required_scopes or []
-        self.bearer_scheme = HTTPBearer()
     
-    async def __call__(self, request: Request) -> AuthInfo:
-        """
-        Process the request and validate the bearer token.
+    async def authenticate(self, conn: HTTPConnection):
+
+        if "Authorization" not in conn.headers:
+            raise AuthenticationError()
+            return None
+            
+        auth_header = conn.headers["Authorization"]
+        if not auth_header.startswith("Bearer "):
+            return None
+            
+        token = auth_header[7:]  # Remove "Bearer " prefix
         
-        Args:
-            request: FastAPI request
-            
-        Returns:
-            Authenticated auth info
-            
-        Raises:
-            HTTPException: If token validation fails
-        """
         try:
-            # Extract and validate the authorization header using FastAPI's built-in scheme
-            credentials: HTTPAuthorizationCredentials = await self.bearer_scheme(request)
-            token = credentials.credentials
-            
             # Validate the token with the provider
-            auth_info: AuthInfo = await self.provider.verify_access_token(token)
+            auth_info = await self.provider.verify_access_token(token)
             
             # Check if the token has all required scopes
             if self.required_scopes:
@@ -72,27 +72,49 @@ class BearerAuthDependency:
             if auth_info.expires_at and auth_info.expires_at < int(time.time()):
                 raise InvalidTokenError("Token has expired")
             
-            return auth_info
+            return AuthCredentials(auth_info.scopes), AuthenticatedUser(auth_info)
             
-        except InvalidTokenError as e:
-            # Return a 401 Unauthorized response with appropriate headers
-            headers = {"WWW-Authenticate": f'Bearer error="{e.error_code}", error_description="{str(e)}"'}
-            raise HTTPException(
-                status_code=401,
-                detail=e.to_response_object(),
-                headers=headers
-            )
-        except InsufficientScopeError as e:
-            # Return a 403 Forbidden response with appropriate headers
-            headers = {"WWW-Authenticate": f'Bearer error="{e.error_code}", error_description="{str(e)}"'}
-            raise HTTPException(
-                status_code=403,
-                detail=e.to_response_object(),
-                headers=headers
-            )
-        except OAuthError as e:
-            # Return a 400 Bad Request response for other OAuth errors
-            raise HTTPException(
-                status_code=400,
-                detail=e.to_response_object()
-            )
+        except (InvalidTokenError, InsufficientScopeError, OAuthError):
+            # Return None to indicate authentication failure
+            return None
+
+
+class BearerAuthMiddleware:
+    """
+    Middleware that requires a valid Bearer token in the Authorization header.
+    
+    This will validate the token with the auth provider and store the resulting 
+    auth info in the request state.
+    
+    Corresponds to bearerAuthMiddleware in src/server/auth/middleware/bearerAuth.ts
+    """
+    
+    def __init__(
+        self,
+        app: Any,
+        provider: OAuthServerProvider,
+        required_scopes: Optional[List[str]] = None
+    ):
+        """
+        Initialize the middleware.
+        
+        Args:
+            app: ASGI application
+            provider: Authentication provider to validate tokens
+            required_scopes: Optional list of scopes that the token must have
+        """
+        self.app = AuthenticationMiddleware(
+            app, 
+            backend=BearerAuthBackend(provider, required_scopes)
+        )
+    
+    async def __call__(self, scope: Dict, receive: Callable, send: Callable) -> None:
+        """
+        Process the request and validate the bearer token.
+        
+        Args:
+            scope: ASGI scope
+            receive: ASGI receive function
+            send: ASGI send function
+        """
+        await self.app(scope, receive, send)

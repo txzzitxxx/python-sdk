@@ -18,6 +18,7 @@ class AuthInfo(BaseModel):
     client_id: str
     scopes: List[str]
     expires_at: Optional[int] = None
+    user_id: Optional[str] = None
     
     class Config:
         extra = "ignore"

@@ -6,13 +6,15 @@ Corresponds to TypeScript file: src/server/auth/router.ts
 
 from dataclasses import dataclass
 import re
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any, Union, Callable
 from urllib.parse import urlparse
 
-from fastapi import Depends, FastAPI, APIRouter, Request, Response
+from starlette.routing import Route, Router
+from starlette.requests import Request
+from starlette.middleware import Middleware
 from pydantic import AnyUrl, BaseModel
 
-from mcp.server.auth.middleware.client_auth import ClientAuthDependency
+from mcp.server.auth.middleware.client_auth import ClientAuthMiddleware, ClientAuthenticator
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.shared.auth import OAuthMetadata
 from mcp.server.auth.handlers.metadata import create_metadata_handler
@@ -67,9 +69,9 @@ def create_auth_router(
         service_documentation_url: AnyUrl | None = None,
         client_registration_options: ClientRegistrationOptions | None = None,
         revocation_options: RevocationOptions | None = None
-    ) -> APIRouter:
+    ) -> Router:
     """
-    Create a FastAPI application with standard MCP authorization endpoints.
+    Create a Starlette router with standard MCP authorization endpoints.
     
     Corresponds to mcpAuthRouter in src/server/auth/router.ts
     
@@ -77,72 +79,69 @@ def create_auth_router(
         provider: OAuth server provider
         issuer_url: Issuer URL for the authorization server
         service_documentation_url: Optional URL for service documentation
+        client_registration_options: Options for client registration
+        revocation_options: Options for token revocation
         
     Returns:
-        FastAPI application with authorization endpoints
+        Starlette router with authorization endpoints
     """
 
     validate_issuer_url(issuer_url)
     
     client_registration_options = client_registration_options or ClientRegistrationOptions()
     revocation_options = revocation_options or RevocationOptions()
-
-    client_auth = ClientAuthDependency(provider.clients_store)
-    
-    auth_app = APIRouter()
-    
-    
-    # Create handlers
-    
-    # Add routes
-    metadata = build_metadata(issuer_url, service_documentation_url, client_registration_options, revocation_options)
-    auth_app.add_api_route(
-        "/.well-known/oauth-authorization-server",
-        create_metadata_handler(metadata),
-        methods=["GET"]
+    metadata = build_metadata(
+        issuer_url,
+        service_documentation_url,
+        client_registration_options,
+        revocation_options,
     )
+    client_authenticator = ClientAuthenticator(provider.clients_store)
     
-    # NOTE: reviewed
-    auth_app.add_api_route(
-        AUTHORIZATION_PATH,
-        create_authorization_handler(provider),
-        methods=["GET", "POST"]
-    )
+    # Create routes
+    auth_router = Router(routes=[
+        Route(
+            "/.well-known/oauth-authorization-server", 
+            endpoint=create_metadata_handler(metadata),
+            methods=["GET"]
+        ),
+        Route(
+            AUTHORIZATION_PATH, 
+            endpoint=create_authorization_handler(provider),
+            methods=["GET", "POST"]
+        ),
+        Route(
+            TOKEN_PATH, 
+            endpoint=create_token_handler(provider, client_authenticator),
+            methods=["POST"]
+        )
+    ])
     
-    # Add token endpoint with client auth dependency
-    # NOTE: reviewed
-    auth_app.add_api_route(
-        TOKEN_PATH,
-        create_token_handler(provider),
-        methods=["POST"],
-        dependencies=[Depends(client_auth)]
-    )
-    
-    # Add registration endpoint if supported
     if client_registration_options.enabled:
         from mcp.server.auth.handlers.register import create_registration_handler
         registration_handler = create_registration_handler(
             provider.clients_store,
             client_secret_expiry_seconds=client_registration_options.client_secret_expiry_seconds,
         )
-        # NOTE: reviewed
-        auth_app.add_api_route(
-            REGISTRATION_PATH,
-            registration_handler,
-            methods=["POST"]
+        auth_router.routes.append(
+            Route(
+                REGISTRATION_PATH, 
+                endpoint=registration_handler,
+                methods=["POST"]
+            )
         )
     
-    # Add revocation endpoint if supported
     if revocation_options.enabled:
-    # NOTE: reviewed
-        auth_app.add_api_route(
-            REVOCATION_PATH,
-            create_revocation_handler(provider),
-            methods=["POST"],
-            dependencies=[Depends(client_auth)]
+        revocation_handler = create_revocation_handler(provider, client_authenticator)
+        auth_router.routes.append(
+            Route(
+                REVOCATION_PATH, 
+                endpoint=revocation_handler,
+                methods=["POST"]
+            )
         )
     
-    return auth_app
+    return auth_router
 
 def build_metadata(
         issuer_url: AnyUrl,
