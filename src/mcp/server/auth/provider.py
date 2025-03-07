@@ -134,6 +134,8 @@ class OAuthServerProvider(Protocol):
             The new access and refresh tokens.
         """
         ...
+
+    # TODO: consider methods to generate refresh tokens and access tokens
     
     async def verify_access_token(self, token: str) -> AuthInfo:
         """

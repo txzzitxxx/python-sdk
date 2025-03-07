@@ -15,11 +15,15 @@ from typing import Any, Callable, Generic, Literal, Optional, Sequence
 
 import anyio
 import pydantic_core
+from starlette.applications import Starlette
+from starlette.authentication import requires
+from starlette.middleware.authentication import AuthenticationMiddleware
 import uvicorn
 from pydantic import BaseModel, Field
 from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.server.auth.router import ClientRegistrationOptions, RevocationOptions
 from mcp.server.auth.types import AuthInfo
@@ -474,24 +478,15 @@ class FastMCP:
                 self._mcp_server.create_initialization_options(),
             )
 
-    async def run_sse_async(self) -> None:
+    def starlette_app(self) -> Starlette:
         """Run the server using SSE transport."""
         from starlette.applications import Starlette
         from starlette.routing import Mount, Route
         from starlette.middleware import Middleware
-        from fastapi import FastAPI, Depends
         
-        # Import auth dependency if needed
-        auth_dependencies = []
-        if self._auth_provider:
-            from mcp.server.auth.middleware.bearer_auth import BearerAuthDependency
-            auth_dependencies = [Depends(BearerAuthDependency(
-                provider=self._auth_provider,
-                required_scopes=self.settings.auth_required_scopes
-            ))]
+        # Set up auth context and dependencies
 
         sse = SseServerTransport("/messages/")
-
         async def handle_sse(request):
             # Add client ID from auth context into request context if available
             request_meta = {}
@@ -505,26 +500,49 @@ class FastMCP:
                     self._mcp_server.create_initialization_options(),
                 )
 
-        # Create Starlette app
-        app = FastAPI(debug=self.settings.debug)
-
-        # Add routes with auth dependency if required
-        app.add_api_route("/sse", endpoint=handle_sse, dependencies=auth_dependencies)
-        # TODO: convert this to a handler so it can take a dependency
-        app.mount("/messages/", sse.handle_post_message) # , dependencies=auth_dependencies)
+        # Create routes
+        routes = []
+        middleware = []
+        required_scopes = self.settings.auth_required_scopes or []
         
         # Add auth endpoints if auth provider is configured
         if self._auth_provider and self.settings.auth_issuer_url:
             from mcp.server.auth.router import create_auth_router
-            auth_app = create_auth_router(
+            if "authenticated" not in required_scopes:
+                required_scopes.append("authenticated")
+
+            # Set up bearer auth middleware if auth is required
+            middleware = [
+                Middleware(
+                    AuthenticationMiddleware,
+                    backend=BearerAuthBackend(
+                        provider=self._auth_provider,
+                        required_scopes=self.settings.auth_required_scopes
+                    )
+                )
+            ]
+            auth_router = create_auth_router(
                 self._auth_provider,
                 self.settings.auth_issuer_url,
                 self.settings.auth_service_documentation_url
             )
-            app.mount("/", auth_app)
+            
+            # Add the auth router as a mount
+            routes.append(Mount("/", app=auth_router))
 
+        routes.append(Route("/sse", endpoint=requires(required_scopes)(handle_sse), methods=["GET"]))
+        routes.append(Mount("/messages/", app=requires(required_scopes)(sse.handle_post_message)))
+        
+        # Create Starlette app with routes and middleware
+        return Starlette(
+            debug=self.settings.debug,
+            routes=routes,
+            middleware=middleware
+        )
+
+    async def run_sse_async(self) -> None:
         config = uvicorn.Config(
-            app,
+            app=self.starlette_app(),
             host=self.settings.host,
             port=self.settings.port,
             log_level=self.settings.log_level.lower(),

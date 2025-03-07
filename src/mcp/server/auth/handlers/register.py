@@ -10,15 +10,16 @@ import time
 from typing import Any, Callable, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import Request, Response
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 from pydantic import ValidationError
-from starlette.responses import JSONResponse
 
 from mcp.server.auth.errors import (
     InvalidRequestError,
     ServerError,
     OAuthError,
 )
+from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.provider import OAuthRegisteredClientsStore
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
 
@@ -31,9 +32,10 @@ def create_registration_handler(clients_store: OAuthRegisteredClientsStore, clie
     
     Args:
         clients_store: The store for registered clients
+        client_secret_expiry_seconds: Optional expiry time for client secrets
         
     Returns:
-        A FastAPI route handler function
+        A Starlette endpoint handler function
     """
     
     async def registration_handler(request: Request) -> Response:
@@ -41,15 +43,16 @@ def create_registration_handler(clients_store: OAuthRegisteredClientsStore, clie
         Handler for the OAuth 2.0 Dynamic Client Registration endpoint.
         
         Args:
-            request: The FastAPI request
+            request: The Starlette request
             
         Returns:
             JSON response with client information or error
         """
         try:
-            # Validate client metadata
+            # Parse request body as JSON
             try:
-                client_metadata = OAuthClientMetadata.model_validate_json(await request.body())
+                body = await request.json()
+                client_metadata = OAuthClientMetadata.model_validate(body)
             except ValidationError as e:
                 raise InvalidRequestError(f"Invalid client metadata: {str(e)}")
             
@@ -90,8 +93,8 @@ def create_registration_handler(clients_store: OAuthRegisteredClientsStore, clie
                 raise ServerError("Failed to register client")
             
             # Return client information
-            return JSONResponse(
-                content=client.model_dump(exclude_none=True),
+            return PydanticJSONResponse(
+                content=client,
                 status_code=201
             )
             

@@ -9,10 +9,10 @@ from urllib.parse import urlparse, urlunparse, urlencode
 from typing import Any, Callable, Dict, List, Literal, Optional
 from urllib.parse import urlencode, parse_qs
 
-from fastapi import Request, Response
+from starlette.requests import Request
+from starlette.responses import JSONResponse, RedirectResponse, Response
 from pydantic import AnyHttpUrl, AnyUrl, BaseModel, Field, ValidationError
 from pydantic_core import Url
-from starlette.responses import JSONResponse, RedirectResponse
 
 from mcp.server.auth.errors import (
     InvalidClientError, 
@@ -81,9 +81,14 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
         # Validate request parameters
         try:
             if request.method == "GET":
-                auth_request = AuthorizationRequest.model_validate(request.query_params)
+                # Convert query_params to dict for pydantic validation
+                params = dict(request.query_params)
+                auth_request = AuthorizationRequest.model_validate(params)
             else:
-                auth_request = AuthorizationRequest.model_validate_json(await request.body())
+                # Parse form data for POST requests
+                form_data = await request.form()
+                params = dict(form_data)
+                auth_request = AuthorizationRequest.model_validate(params)
         except ValidationError as e:
             raise InvalidRequestError(str(e))
         
