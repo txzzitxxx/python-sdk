@@ -31,13 +31,13 @@ class ClientAuthRequest(BaseModel):
 
 class ClientAuthenticator:
     """
-    Dependency that authenticates a client using client_id and client_secret.
-
-    This is a callable that can be used to validate client credentials in a request.
-
-    Corresponds to authenticateClient in src/server/auth/middleware/clientAuth.ts
+    ClientAuthenticator is a callable which validates requests from a client application,
+    used to verify /token and /revoke calls.
+    If, during registration, the client requested to be issued a secret, the authenticator
+    asserts that /token and /register calls must be authenticated with that same token.
+    NOTE: clients can opt for no authentication during registration, in which case this logic
+    is skipped.
     """
-
     def __init__(self, clients_store: OAuthRegisteredClientsStore):
         """
         Initialize the dependency.
