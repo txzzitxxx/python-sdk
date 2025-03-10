@@ -43,16 +43,20 @@ class OAuthClientMetadata(BaseModel):
     """
 
     redirect_uris: List[AnyHttpUrl] = Field(..., min_length=1)
-    # token_endpoint_auth_method: this implementation only supports none & client_secret_basic;
+    # token_endpoint_auth_method: this implementation only supports none & 
+    # client_secret_basic;
     # ie: we do not support client_secret_post
-    token_endpoint_auth_method: Literal["none", "client_secret_basic"] = "client_secret_basic"
+    token_endpoint_auth_method: Literal["none", "client_secret_basic"] = \
+        "client_secret_basic"
     # grant_types: this implementation only supports authorization_code & refresh_token
-    grant_types: List[Literal["authorization_code", "refresh_token"]] = ["authorization_code"]
+    grant_types: List[Literal["authorization_code", "refresh_token"]] = \
+        ["authorization_code"]
     # this implementation only supports code; ie: it does not support implicit grants
     response_types: List[Literal["code"]] = ["code"]
     scope: Optional[str] = None
 
-    # these fields are currently unused, but we support & store them for potential future use
+    # these fields are currently unused, but we support & store them for potential 
+    # future use
     client_name: Optional[str] = None
     client_uri: Optional[AnyHttpUrl] = None
     logo_uri: Optional[AnyHttpUrl] = None

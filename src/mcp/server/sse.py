@@ -132,7 +132,8 @@ class SseServerTransport:
             logger.debug("Yielding read and write streams")
             # TODO: hold on; shouldn't we be returning the EventSourceResponse?
             # I think this is why the tests hang
-            # TODO: we probably shouldn't return response here, since it's a breaking change
+            # TODO: we probably shouldn't return response here, since it's a breaking 
+            # change
             # this is just to test
             yield (read_stream, write_stream, response)
 

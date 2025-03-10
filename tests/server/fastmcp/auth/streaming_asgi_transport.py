@@ -161,8 +161,8 @@ class StreamingASGITransport(AsyncBaseTransport):
                 response_complete.set()
 
         # Create tasks for running the app and processing messages
-        app_task = asyncio.create_task(run_app())
-        process_task = asyncio.create_task(process_messages())
+        asyncio.create_task(run_app())
+        asyncio.create_task(process_messages())
 
         # Wait for the initial response or timeout
         await initial_response_ready.wait()

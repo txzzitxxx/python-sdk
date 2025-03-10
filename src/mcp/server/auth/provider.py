@@ -81,9 +81,11 @@ class OAuthServerProvider(Protocol):
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
         """
-        Generates and stores an authorization code as part of completing the /authorize OAuth step.
+        Generates and stores an authorization code as part of completing the /authorize 
+        OAuth step.
 
-        Implementations SHOULD generate an authorization code with at least 160 bits of entropy,
+        Implementations SHOULD generate an authorization code with at least 160 bits of 
+        entropy,
         and MUST generate an authorization code with at least 128 bits of entropy.
         See https://datatracker.ietf.org/doc/html/rfc6749#section-10.10.
         """
