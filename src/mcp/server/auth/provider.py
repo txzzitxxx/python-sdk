@@ -11,7 +11,6 @@ from pydantic import AnyHttpUrl, BaseModel
 from mcp.server.auth.types import AuthInfo
 from mcp.shared.auth import (
     OAuthClientInformationFull,
-    OAuthTokenRevocationRequest,
     OAuthTokens,
 )
 
