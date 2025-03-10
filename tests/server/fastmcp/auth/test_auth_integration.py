@@ -19,11 +19,12 @@ from starlette.routing import Mount
 
 from mcp.server.auth.errors import InvalidTokenError
 from mcp.server.auth.provider import (
-    AuthorizationCodeMeta,
+    AuthorizationCode,
     AuthorizationParams,
     OAuthRegisteredClientsStore,
     OAuthServerProvider,
     OAuthTokenRevocationRequest,
+    construct_redirect_uri,
 )
 from mcp.server.auth.router import (
     ClientRegistrationOptions,
@@ -34,7 +35,7 @@ from mcp.server.auth.types import AuthInfo
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import (
     OAuthClientInformationFull,
-    OAuthTokens,
+    TokenSuccessResponse,
 )
 from mcp.types import JSONRPCRequest
 
@@ -68,33 +69,32 @@ class MockOAuthProvider(OAuthServerProvider):
     def clients_store(self) -> OAuthRegisteredClientsStore:
         return self.client_store
 
-    async def create_authorization_code(
+    async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
-        # Generate an authorization code
-        code = f"code_{int(time.time())}"
-
-        # Store the code for later verification
-        self.auth_codes[code] = AuthorizationCodeMeta(
+        # toy authorize implementation which just immediately generates an authorization
+        # code and completes the redirect
+        code = AuthorizationCode(
+            code=f"code_{int(time.time())}",
             client_id= client.client_id,
             code_challenge= params.code_challenge,
             redirect_uri= params.redirect_uri,
             issued_at= time.time(),
+            scopes=params.scopes or ["read", "write"]
         )
+        self.auth_codes[code.code] = code
 
-        return code
+        return construct_redirect_uri(str(params.redirect_uri), code, params.state)
 
-    async def load_authorization_code_metadata(
+    async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> AuthorizationCodeMeta | None:
+    ) -> AuthorizationCode | None:
         return self.auth_codes.get(authorization_code)
 
     async def exchange_authorization_code(
-        self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> OAuthTokens:
-        # Get the stored code info
-        code_info = self.auth_codes.get(authorization_code)
-        if not code_info:
+        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
+    ) -> TokenSuccessResponse:
+        if authorization_code.code not in self.auth_codes:
             raise InvalidTokenError("Invalid authorization code")
 
         # Generate an access token and refresh token
@@ -104,16 +104,16 @@ class MockOAuthProvider(OAuthServerProvider):
         # Store the tokens
         self.tokens[access_token] = {
             "client_id": client.client_id,
-            "scopes": ["read", "write"],
+            "scopes": authorization_code.scopes,
             "expires_at": int(time.time()) + 3600,
         }
 
         self.refresh_tokens[refresh_token] = access_token
 
         # Remove the used code
-        del self.auth_codes[authorization_code]
+        del self.auth_codes[authorization_code.code]
 
-        return OAuthTokens(
+        return TokenSuccessResponse(
             access_token=access_token,
             token_type="bearer",
             expires_in=3600,
@@ -126,7 +126,7 @@ class MockOAuthProvider(OAuthServerProvider):
         client: OAuthClientInformationFull,
         refresh_token: str,
         scopes: Optional[List[str]] = None,
-    ) -> OAuthTokens:
+    ) -> TokenSuccessResponse:
         # Check if refresh token exists
         if refresh_token not in self.refresh_tokens:
             raise InvalidTokenError("Invalid refresh token")
@@ -160,7 +160,7 @@ class MockOAuthProvider(OAuthServerProvider):
         del self.refresh_tokens[refresh_token]
         del self.tokens[old_access_token]
 
-        return OAuthTokens(
+        return TokenSuccessResponse(
             access_token=new_access_token,
             token_type="bearer",
             expires_in=3600,

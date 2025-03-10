@@ -19,6 +19,10 @@ from mcp.server.auth.errors import (
 from mcp.server.auth.provider import AuthorizationParams, OAuthServerProvider
 from mcp.shared.auth import OAuthClientInformationFull
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 class AuthorizationRequest(BaseModel):
     client_id: str = Field(..., description="The client ID")
@@ -122,28 +126,18 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
         )
 
         try:
-            # Let the provider handle the authorization flow
-            authorization_code = await provider.create_authorization_code(
-                client, auth_params
-            )
+            # Let the provider pick the next URI to redirect to
             response = RedirectResponse(
                 url="", status_code=302, headers={"Cache-Control": "no-store"}
             )
-
-            # Redirect with code
-            parsed_uri = urlparse(str(auth_params.redirect_uri))
-            query_params = [(k, v) for k, vs in parse_qs(parsed_uri.query) for v in vs]
-            query_params.append(("code", authorization_code))
-            if auth_params.state:
-                query_params.append(("state", auth_params.state))
-
-            redirect_url = urlunparse(
-                parsed_uri._replace(query=urlencode(query_params))
+            response.headers["location"] = await provider.authorize(
+                client, auth_params
             )
-            response.headers["location"] = redirect_url
 
             return response
         except Exception as e:
+            logger.exception("error from authorize()", exc_info=e)
+            
             return RedirectResponse(
                 url=create_error_redirect(redirect_uri, e, auth_request.state),
                 status_code=302,

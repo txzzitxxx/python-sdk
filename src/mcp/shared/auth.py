@@ -9,7 +9,7 @@ from typing import Any, List, Literal, Optional
 from pydantic import AnyHttpUrl, BaseModel, Field
 
 
-class OAuthErrorResponse(BaseModel):
+class TokenErrorResponse(BaseModel):
     """
     See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
     """
@@ -19,7 +19,7 @@ class OAuthErrorResponse(BaseModel):
     error_uri: Optional[AnyHttpUrl] = None
 
 
-class OAuthTokens(BaseModel):
+class TokenSuccessResponse(BaseModel):
     """
     See https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
     """
