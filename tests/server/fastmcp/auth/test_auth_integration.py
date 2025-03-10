@@ -14,6 +14,7 @@ import anyio
 from pydantic import AnyUrl
 import pytest
 import httpx
+from httpx_sse import aconnect_sse
 from starlette.applications import Starlette
 from starlette.datastructures import MutableHeaders
 from starlette.testclient import TestClient
@@ -21,6 +22,7 @@ from starlette.routing import Route, Router, Mount
 from starlette.responses import RedirectResponse, JSONResponse, Response
 from starlette.requests import Request
 from starlette.middleware import Middleware
+from starlette.types import ASGIApp
 
 from mcp.server.auth.errors import InvalidTokenError
 from mcp.server.auth.middleware.client_auth import ClientAuthMiddleware
@@ -33,6 +35,8 @@ from mcp.shared.auth import (
     OAuthTokens,
 )
 from mcp.server.fastmcp import FastMCP
+from mcp.types import JSONRPCRequest
+from .streaming_asgi_transport import StreamingASGITransport
 
 
 # Mock client store for testing
@@ -440,6 +444,13 @@ class TestFastMCPWithAuth:
             auth_provider=mock_oauth_provider,
             auth_issuer_url="https://auth.example.com",
             require_auth=True,
+            auth_client_registration_options=ClientRegistrationOptions(
+                enabled=True
+            ),
+            auth_revocation_options=RevocationOptions(
+                enabled=True
+            ),
+            auth_required_scopes=["read"]
         )
         
         # Add a test tool
@@ -447,22 +458,24 @@ class TestFastMCPWithAuth:
         def test_tool(x: int) -> str:
             return f"Result: {x}"
         
-        transport = httpx.ASGITransport(app=mcp.starlette_app()) # pyright: ignore
+        transport = StreamingASGITransport(app=mcp.starlette_app()) # pyright: ignore
         test_client = httpx.AsyncClient(transport=transport, base_url="http://mcptest.com")
+        # test_client = httpx.AsyncClient(app=mcp.starlette_app(), base_url="http://mcptest.com")
         
         # Test metadata endpoint
         response = await test_client.get("/.well-known/oauth-authorization-server")
         assert response.status_code == 200
         
         # Test that auth is required for protected endpoints
-        response = await test_client.get("/test")
-        assert response.status_code == 401
+        response = await test_client.get("/sse")
+        # TODO: we should return 401/403 depending on whether authn or authz fails
+        assert response.status_code == 403
+
+        response = await test_client.post("/messages/")
+        # TODO: we should return 401/403 depending on whether authn or authz fails
+        assert response.status_code == 403, response.content
         
-        # Test that public endpoints don't require auth
-        response = await test_client.get("/public")
-        assert response.status_code == 200
-        
-        # Register a client
+        # now, become authenticated and try to go through the flow again
         client_metadata = {
             "redirect_uris": ["https://client.example.com/callback"],
             "client_name": "Test Client",
@@ -506,7 +519,7 @@ class TestFastMCPWithAuth:
         # Exchange the authorization code for tokens
         response = await test_client.post(
             "/token",
-            data={
+            json={
                 "grant_type": "authorization_code",
                 "client_id": client_info["client_id"],
                 "client_secret": client_info["client_secret"],
@@ -518,19 +531,46 @@ class TestFastMCPWithAuth:
         
         token_response = response.json()
         assert "access_token" in token_response
-        
+        authorization = f"Bearer {token_response['access_token']}"
+
+
         # Test the authenticated endpoint with valid token
-        response = await test_client.get(
-            "/test",
-            headers={"Authorization": f"Bearer {token_response['access_token']}"},
-        )
-        assert response.status_code == 200
-        assert response.json()["status"] == "ok"
-        assert response.json()["client_id"] == client_info["client_id"]
-        
-        # Test with invalid token
-        response = await test_client.get(
-            "/test",
-            headers={"Authorization": "Bearer invalid_token"},
-        )
-        assert response.status_code == 401
+        async with aconnect_sse(test_client, "GET", "/sse", headers={"Authorization": authorization}) as event_source:
+            assert event_source.response.status_code == 200
+            events = event_source.aiter_sse()
+            sse = await events.__anext__()
+            assert sse.event == "endpoint"
+            assert sse.data.startswith("/messages/?session_id=")
+            messages_uri = sse.data
+            
+            # verify that we can now post to the /messages endpoint, and get a response on the /sse endpoint
+            response = await test_client.post(
+                messages_uri,
+                headers={"Authorization": authorization},
+                content=JSONRPCRequest(
+                    jsonrpc="2.0",
+                    id="123",
+                    method="initialize",
+                    params={
+                        "protocolVersion": "2024-11-05",
+                        "capabilities": {
+                            "roots": {
+                                "listChanged": True
+                            },
+                            "sampling": {},
+                        },
+                        "clientInfo": {
+                            "name": "ExampleClient",
+                            "version": "1.0.0"
+                        }
+                    },
+                ).model_dump_json(),
+            )
+            assert response.status_code == 202
+            assert response.content == b"Accepted"
+
+            sse = await events.__anext__()
+            assert sse.event == "message"
+            sse_data = json.loads(sse.data)
+            assert sse_data["id"] == '123'
+            assert set(sse_data["result"]["capabilities"].keys()) == set(("experimental", "prompts", "resources", "tools"))

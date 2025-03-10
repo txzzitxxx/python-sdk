@@ -16,12 +16,13 @@ import pydantic_core
 from starlette.applications import Starlette
 from starlette.authentication import requires
 from starlette.middleware.authentication import AuthenticationMiddleware
+from sse_starlette import EventSourceResponse
 import uvicorn
 from pydantic import BaseModel, Field
 from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend
+from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.server.auth.router import ClientRegistrationOptions, RevocationOptions
 from mcp.server.auth.types import AuthInfo
@@ -501,7 +502,7 @@ class FastMCP:
         # Set up auth context and dependencies
 
         sse = SseServerTransport("/messages/")
-        async def handle_sse(request):
+        async def handle_sse(request) -> EventSourceResponse:
             # Add client ID from auth context into request context if available
             request_meta = {}
                 
@@ -513,17 +514,17 @@ class FastMCP:
                     streams[1],
                     self._mcp_server.create_initialization_options(),
                 )
+                return streams[2]
 
         # Create routes
         routes = []
         middleware = []
         required_scopes = self.settings.auth_required_scopes or []
+        auth_router = None
         
         # Add auth endpoints if auth provider is configured
         if self._auth_provider and self.settings.auth_issuer_url:
             from mcp.server.auth.router import create_auth_router
-            if "authenticated" not in required_scopes:
-                required_scopes.append("authenticated")
 
             # Set up bearer auth middleware if auth is required
             middleware = [
@@ -531,21 +532,23 @@ class FastMCP:
                     AuthenticationMiddleware,
                     backend=BearerAuthBackend(
                         provider=self._auth_provider,
-                        required_scopes=self.settings.auth_required_scopes
                     )
                 )
             ]
             auth_router = create_auth_router(
-                self._auth_provider,
-                self.settings.auth_issuer_url,
-                self.settings.auth_service_documentation_url
+                provider=self._auth_provider,
+                issuer_url=self.settings.auth_issuer_url,
+                service_documentation_url=self.settings.auth_service_documentation_url,
+                client_registration_options=self.settings.auth_client_registration_options,
+                revocation_options=self.settings.auth_revocation_options
             )
             
             # Add the auth router as a mount
-            routes.append(Mount("/", app=auth_router))
 
         routes.append(Route("/sse", endpoint=requires(required_scopes)(handle_sse), methods=["GET"]))
-        routes.append(Mount("/messages/", app=requires(required_scopes)(sse.handle_post_message)))
+        routes.append(Mount("/messages/", app=RequireAuthMiddleware(sse.handle_post_message, required_scopes)))
+        if auth_router:
+            routes.append(Mount("/", app=auth_router))
         
         # Create Starlette app with routes and middleware
         return Starlette(
