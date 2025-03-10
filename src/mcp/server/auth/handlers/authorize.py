@@ -26,6 +26,7 @@ class AuthorizationRequest(BaseModel):
         ..., description="URL to redirect to after authorization"
     )
 
+    # see OAuthClientMetadata; we only support `code`
     response_type: Literal["code"] = Field(
         ..., description="Must be 'code' for authorization code flow"
     )
