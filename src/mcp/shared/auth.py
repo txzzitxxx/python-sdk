@@ -4,7 +4,7 @@ Authorization types and models for MCP OAuth implementation.
 Corresponds to TypeScript file: src/shared/auth.ts
 """
 
-from typing import Any, List, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
@@ -38,18 +38,24 @@ class OAuthTokens(BaseModel):
 class OAuthClientMetadata(BaseModel):
     """
     RFC 7591 OAuth 2.0 Dynamic Client Registration metadata.
-
-    Corresponds to OAuthClientMetadataSchema in src/shared/auth.ts
+    See https://datatracker.ietf.org/doc/html/rfc7591#section-2
+    for the full specification.
     """
 
     redirect_uris: List[AnyHttpUrl] = Field(..., min_length=1)
-    token_endpoint_auth_method: Optional[str] = None
-    grant_types: Optional[List[str]] = None
-    response_types: Optional[List[str]] = None
+    # token_endpoint_auth_method: this implementation only supports none & client_secret_basic;
+    # ie: we do not support client_secret_post
+    token_endpoint_auth_method: Literal["none", "client_secret_basic"] = "client_secret_basic"
+    # grant_types: this implementation only supports authorization_code & refresh_token
+    grant_types: List[Literal["authorization_code", "refresh_token"]] = ["authorization_code"]
+    # this implementation only supports code; ie: it does not support implicit grants
+    response_types: List[Literal["code"]] = ["code"]
+    scope: Optional[str] = None
+
+    # these fields are currently unused, but we support & store them for potential future use
     client_name: Optional[str] = None
     client_uri: Optional[AnyHttpUrl] = None
     logo_uri: Optional[AnyHttpUrl] = None
-    scope: Optional[str] = None
     contacts: Optional[List[str]] = None
     tos_uri: Optional[AnyHttpUrl] = None
     policy_uri: Optional[AnyHttpUrl] = None

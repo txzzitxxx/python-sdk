@@ -21,12 +21,6 @@ from mcp.shared.auth import OAuthClientInformationFull
 
 
 class AuthorizationRequest(BaseModel):
-    """
-    Model for the authorization request parameters.
-
-    Corresponds to request schema in authorizationHandler in src/server/auth/handlers/authorize.ts
-    """
-
     client_id: str = Field(..., description="The client ID")
     redirect_uri: AnyHttpUrl | None = Field(
         ..., description="URL to redirect to after authorization"
@@ -42,7 +36,8 @@ class AuthorizationRequest(BaseModel):
     state: Optional[str] = Field(None, description="Optional state parameter")
     scope: Optional[str] = Field(
         None,
-        description="Optional scope; if specified, should be a space-separated list of scope strings",
+        description="Optional scope; if specified, should be " \
+            "a space-separated list of scope strings",
     )
 
     class Config:

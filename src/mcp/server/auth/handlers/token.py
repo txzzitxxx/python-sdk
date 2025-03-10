@@ -24,24 +24,13 @@ from mcp.shared.auth import OAuthTokens
 
 
 class AuthorizationCodeRequest(ClientAuthRequest):
-    """
-    Model for the authorization code grant request parameters.
-
-    Corresponds to AuthorizationCodeExchangeSchema in src/server/auth/handlers/token.ts
-    """
-
     grant_type: Literal["authorization_code"]
     code: str = Field(..., description="The authorization code")
     code_verifier: str = Field(..., description="PKCE code verifier")
+    # TODO: this should take redirect_uri
 
 
 class RefreshTokenRequest(ClientAuthRequest):
-    """
-    Model for the refresh token grant request parameters.
-
-    Corresponds to RefreshTokenExchangeSchema in src/server/auth/handlers/token.ts
-    """
-
     grant_type: Literal["refresh_token"]
     refresh_token: str = Field(..., description="The refresh token")
     scope: Optional[str] = Field(None, description="Optional scope parameter")
@@ -54,48 +43,25 @@ class TokenRequest(RootModel):
     ]
 
 
-# TokenRequest = RootModel(Annotated[Union[AuthorizationCodeRequest, RefreshTokenRequest], Field(discriminator="grant_type")])
-
 
 def create_token_handler(
     provider: OAuthServerProvider, client_authenticator: ClientAuthenticator
 ) -> Callable:
-    """
-    Create a handler for the OAuth 2.0 Token endpoint.
-
-    Corresponds to tokenHandler in src/server/auth/handlers/token.ts
-
-    Args:
-        provider: The OAuth server provider
-
-    Returns:
-        A Starlette endpoint handler function
-    """
-
     async def token_handler(request: Request):
-        """
-        Handler for the OAuth 2.0 Token endpoint.
-
-        Args:
-            request: The Starlette request
-
-        Returns:
-            JSON response with tokens or error
-        """
-        # Parse request body as form data or JSON
-        content_type = request.headers.get("Content-Type", "")
-
         try:
             token_request = TokenRequest.model_validate_json(await request.body()).root
         except ValidationError as e:
             raise InvalidRequestError(f"Invalid request body: {e}")
         client_info = await client_authenticator(token_request)
 
+        if token_request.grant_type not in client_info.grant_types:
+            raise InvalidRequestError(f"Unsupported grant type (supported grant types are {client_info.grant_types})")
+
         tokens: OAuthTokens
 
         match token_request:
             case AuthorizationCodeRequest():
-                # TODO: verify that the redirect URIs match; does the client actually provide this?
+                # TODO: verify that the redirect URIs match
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
                 # TODO: enforce TTL on the authorization code
 
