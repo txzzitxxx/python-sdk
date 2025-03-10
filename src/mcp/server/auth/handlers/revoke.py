@@ -45,9 +45,8 @@ def create_revocation_handler(
         Handler for the OAuth 2.0 Token Revocation endpoint.
         """
         try:
-            revocation_request = RevocationRequest.model_validate_json(
-                await request.body()
-            )
+            form_data = await request.form()
+            revocation_request = RevocationRequest.model_validate(dict(form_data))
         except ValidationError as e:
             raise InvalidRequestError(f"Invalid request body: {e}")
 

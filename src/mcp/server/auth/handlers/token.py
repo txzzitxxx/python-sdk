@@ -49,7 +49,8 @@ def create_token_handler(
 ) -> Callable:
     async def token_handler(request: Request):
         try:
-            token_request = TokenRequest.model_validate_json(await request.body()).root
+            form_data = await request.form()
+            token_request = TokenRequest.model_validate(dict(form_data)).root
         except ValidationError as e:
             raise InvalidRequestError(f"Invalid request body: {e}")
         client_info = await client_authenticator(token_request)

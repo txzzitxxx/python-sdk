@@ -36,8 +36,8 @@ class AuthorizationRequest(BaseModel):
     state: Optional[str] = Field(None, description="Optional state parameter")
     scope: Optional[str] = Field(
         None,
-        description="Optional scope; if specified, should be " \
-            "a space-separated list of scope strings",
+        description="Optional scope; if specified, should be "
+        "a space-separated list of scope strings",
     )
 
     class Config:
