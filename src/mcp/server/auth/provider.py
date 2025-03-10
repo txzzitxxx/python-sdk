@@ -72,19 +72,15 @@ class OAuthServerProvider(Protocol):
         """
         ...
     
-    # TODO: do we really want to be putting the response in this method?
-    async def authorize(self, 
+    async def create_authorization_code(self, 
                        client: OAuthClientInformationFull, 
-                       params: AuthorizationParams, 
-                       response: Response) -> None:
+                       params: AuthorizationParams) -> str:
         """
-        Begins the authorization flow, which can be implemented by this server or via redirection.
-        Must eventually issue a redirect with authorization response or error to the given redirect URI.
-        
-        Args:
-            client: The client requesting authorization.
-            params: Parameters for the authorization request.
-            response: The response object to write to.
+        Generates and stores an authorization code as part of completing the /authorize OAuth step.
+
+        Implementations SHOULD generate an authorization code with at least 160 bits of entropy,
+        and MUST generate an authorization code with at least 128 bits of entropy.
+        See https://datatracker.ietf.org/doc/html/rfc6749#section-10.10.
         """
         ...
     

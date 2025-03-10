@@ -64,10 +64,9 @@ class MockOAuthProvider(OAuthServerProvider):
     def clients_store(self) -> OAuthRegisteredClientsStore:
         return self.client_store
         
-    async def authorize(self, 
+    async def create_authorization_code(self, 
                      client: OAuthClientInformationFull, 
-                     params: AuthorizationParams, 
-                     response: Response):
+                     params: AuthorizationParams) -> str:
         # Generate an authorization code
         code = f"code_{int(time.time())}"
         
@@ -78,14 +77,9 @@ class MockOAuthProvider(OAuthServerProvider):
             "redirect_uri": params.redirect_uri,
             "expires_at": int(time.time()) + 600,  # 10 minutes
         }
-        
-        # Redirect with code
-        query = {"code": code}
-        if params.state:
-            query["state"] = params.state
-            
-        redirect_url = f"{params.redirect_uri}?" + "&".join([f"{k}={v}" for k, v in query.items()])
-        response.headers["location"] = redirect_url
+
+        return code
+
         
     async def challenge_for_authorization_code(self, 
                                        client: OAuthClientInformationFull, 
