@@ -22,7 +22,7 @@ class ClientAuthRequest(BaseModel):
     """
     Model for client authentication request body.
 
-    Corresponds to ClientAuthenticatedRequestSchema in 
+    Corresponds to ClientAuthenticatedRequestSchema in
     src/server/auth/middleware/clientAuth.ts
     """
 
@@ -32,15 +32,16 @@ class ClientAuthRequest(BaseModel):
 
 class ClientAuthenticator:
     """
-    ClientAuthenticator is a callable which validates requests from a client 
+    ClientAuthenticator is a callable which validates requests from a client
     application,
     used to verify /token and /revoke calls.
-    If, during registration, the client requested to be issued a secret, the 
-    authenticator asserts that /token and /register calls must be authenticated with 
+    If, during registration, the client requested to be issued a secret, the
+    authenticator asserts that /token and /register calls must be authenticated with
     that same token.
-    NOTE: clients can opt for no authentication during registration, in which case this 
+    NOTE: clients can opt for no authentication during registration, in which case this
     logic is skipped.
     """
+
     def __init__(self, clients_store: OAuthRegisteredClientsStore):
         """
         Initialize the dependency.

@@ -327,6 +327,55 @@ class TestAuthEndpoints:
         # assert await mock_oauth_provider.clients_store.get_client(
         #     client_info["client_id"]
         # ) is not None
+        
+    @pytest.mark.anyio
+    async def test_authorize_form_post(
+        self, test_client: httpx.AsyncClient, mock_oauth_provider: MockOAuthProvider
+    ):
+        """Test the authorization endpoint using POST with form-encoded data."""
+        # Register a client
+        client_metadata = {
+            "redirect_uris": ["https://client.example.com/callback"],
+            "client_name": "Test Client",
+            "grant_types": ["authorization_code", "refresh_token"],
+        }
+
+        response = await test_client.post(
+            "/register",
+            json=client_metadata,
+        )
+        assert response.status_code == 201
+        client_info = response.json()
+
+        # Create a PKCE challenge
+        code_verifier = "some_random_verifier_string"
+        code_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+            .decode()
+            .rstrip("=")
+        )
+
+        # Use POST with form-encoded data for authorization
+        response = await test_client.post(
+            "/authorize",
+            data={
+                "response_type": "code",
+                "client_id": client_info["client_id"],
+                "redirect_uri": "https://client.example.com/callback",
+                "code_challenge": code_challenge,
+                "code_challenge_method": "S256",
+                "state": "test_form_state",
+            },
+        )
+        assert response.status_code == 302
+
+        # Extract the authorization code from the redirect URL
+        redirect_url = response.headers["location"]
+        parsed_url = urlparse(redirect_url)
+        query_params = parse_qs(parsed_url.query)
+
+        assert "code" in query_params
+        assert query_params["state"][0] == "test_form_state"
 
     @pytest.mark.anyio
     async def test_authorization_flow(
@@ -337,7 +386,7 @@ class TestAuthEndpoints:
         client_metadata = {
             "redirect_uris": ["https://client.example.com/callback"],
             "client_name": "Test Client",
-            "grant_types": ["authorization_code", "refresh_token"]
+            "grant_types": ["authorization_code", "refresh_token"],
         }
 
         response = await test_client.post(
@@ -355,7 +404,7 @@ class TestAuthEndpoints:
             .rstrip("=")
         )
 
-        # 3. Request authorization
+        # 3. Request authorization using GET with query params
         response = await test_client.get(
             "/authorize",
             params={
@@ -381,7 +430,7 @@ class TestAuthEndpoints:
         # 5. Exchange the authorization code for tokens
         response = await test_client.post(
             "/token",
-            json={
+            data={
                 "grant_type": "authorization_code",
                 "client_id": client_info["client_id"],
                 "client_secret": client_info["client_secret"],
@@ -411,7 +460,7 @@ class TestAuthEndpoints:
         # 7. Refresh the token
         response = await test_client.post(
             "/token",
-            json={
+            data={
                 "grant_type": "refresh_token",
                 "client_id": client_info["client_id"],
                 "client_secret": client_info["client_secret"],
@@ -429,7 +478,7 @@ class TestAuthEndpoints:
         # 8. Revoke the token
         response = await test_client.post(
             "/revoke",
-            json={
+            data={
                 "client_id": client_info["client_id"],
                 "client_secret": client_info["client_secret"],
                 "token": new_token_response["access_token"],
@@ -505,10 +554,10 @@ class TestFastMCPWithAuth:
             .rstrip("=")
         )
 
-        # Request authorization
-        response = await test_client.get(
+        # Request authorization using POST with form-encoded data
+        response = await test_client.post(
             "/authorize",
-            params={
+            data={
                 "response_type": "code",
                 "client_id": client_info["client_id"],
                 "redirect_uri": "https://client.example.com/callback",
@@ -530,7 +579,7 @@ class TestFastMCPWithAuth:
         # Exchange the authorization code for tokens
         response = await test_client.post(
             "/token",
-            json={
+            data={
                 "grant_type": "authorization_code",
                 "client_id": client_info["client_id"],
                 "client_secret": client_info["client_secret"],
