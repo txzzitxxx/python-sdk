@@ -36,9 +36,9 @@ class AuthorizationRequest(BaseModel):
 
     response_type: Literal["code"] = Field(..., description="Must be 'code' for authorization code flow")
     code_challenge: str = Field(..., description="PKCE code challenge")
-    code_challenge_method: Literal["S256"] = Field("S256", description="PKCE code challenge method")
+    code_challenge_method: Literal["S256"] = Field("S256", description="PKCE code challenge method, must be S256")
     state: Optional[str] = Field(None, description="Optional state parameter")
-    scope: Optional[str] = Field(None, description="Optional scope parameter")
+    scope: Optional[str] = Field(None, description="Optional scope; if specified, should be a space-separated list of scope strings")
     
     class Config:
         extra = "ignore"
@@ -113,12 +113,21 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
             code_challenge=auth_request.code_challenge,
             redirect_uri=redirect_uri,
         )
-        
-        response = RedirectResponse(url="", status_code=302, headers={"Cache-Control": "no-store"})
             
         try:
             # Let the provider handle the authorization flow
-            await provider.authorize(client, auth_params, response)
+            authorization_code = await provider.create_authorization_code(client, auth_params)
+            response = RedirectResponse(url="", status_code=302, headers={"Cache-Control": "no-store"})
+            
+            # Redirect with code
+            parsed_uri = urlparse(str(auth_params.redirect_uri))
+            query_params = [(k, v) for k, vs in parse_qs(parsed_uri.query) for v in vs]
+            query_params.append(("code", authorization_code))
+            if auth_params.state:
+                query_params.append(("state", auth_params.state))
+            
+            redirect_url = urlunparse(parsed_uri._replace(query=urlencode(query_params)))
+            response.headers["location"] = redirect_url
             
             return response
         except Exception as e:

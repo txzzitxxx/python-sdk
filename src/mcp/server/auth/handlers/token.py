@@ -88,6 +88,10 @@ def create_token_handler(provider: OAuthServerProvider, client_authenticator: Cl
         
         match token_request:
             case AuthorizationCodeRequest():
+                # TODO: verify that the redirect URIs match; does the client actually provide this?
+                # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
+                # TODO: enforce TTL on the authorization code
+
                 # Verify PKCE code verifier
                 expected_challenge = await provider.challenge_for_authorization_code(
                     client_info, token_request.code
