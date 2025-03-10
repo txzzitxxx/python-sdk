@@ -102,15 +102,7 @@ class OAuthClientRegistrationError(BaseModel):
     error_description: Optional[str] = None
 
 
-class OAuthTokenRevocationRequest(BaseModel):
-    """
-    RFC 7009 OAuth 2.0 Token Revocation request.
 
-    Corresponds to OAuthTokenRevocationRequestSchema in src/shared/auth.ts
-    """
-
-    token: str
-    token_type_hint: Optional[str] = None
 
 
 class OAuthMetadata(BaseModel):
