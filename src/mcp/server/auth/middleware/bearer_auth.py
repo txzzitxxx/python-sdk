@@ -9,8 +9,9 @@ from typing import List, Optional, Callable, Awaitable, cast, Dict, Any
 
 from starlette.requests import HTTPConnection, Request
 from starlette.exceptions import HTTPException
-from starlette.authentication import AuthCredentials, AuthenticationBackend, AuthenticationError, BaseUser, SimpleUser, UnauthenticatedUser
+from starlette.authentication import AuthCredentials, AuthenticationBackend, AuthenticationError, BaseUser, SimpleUser, UnauthenticatedUser, has_required_scope
 from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.types import Scope
 
 from mcp.server.auth.errors import InsufficientScopeError, InvalidTokenError, OAuthError
 from mcp.server.auth.provider import OAuthServerProvider
@@ -34,22 +35,12 @@ class BearerAuthBackend(AuthenticationBackend):
     def __init__(
         self,
         provider: OAuthServerProvider,
-        required_scopes: Optional[List[str]] = None
     ):
-        """
-        Initialize the backend.
-        
-        Args:
-            provider: Authentication provider to validate tokens
-            required_scopes: Optional list of scopes that the token must have
-        """
         self.provider = provider
-        self.required_scopes = required_scopes or []
     
     async def authenticate(self, conn: HTTPConnection):
 
         if "Authorization" not in conn.headers:
-            raise AuthenticationError()
             return None
             
         auth_header = conn.headers["Authorization"]
@@ -61,14 +52,7 @@ class BearerAuthBackend(AuthenticationBackend):
         try:
             # Validate the token with the provider
             auth_info = await self.provider.verify_access_token(token)
-            
-            # Check if the token has all required scopes
-            if self.required_scopes:
-                has_all_scopes = all(scope in auth_info.scopes for scope in self.required_scopes)
-                if not has_all_scopes:
-                    raise InsufficientScopeError("Insufficient scope")
-            
-            # Check if the token is expired
+
             if auth_info.expires_at and auth_info.expires_at < int(time.time()):
                 raise InvalidTokenError("Token has expired")
             
@@ -79,7 +63,7 @@ class BearerAuthBackend(AuthenticationBackend):
             return None
 
 
-class BearerAuthMiddleware:
+class RequireAuthMiddleware:
     """
     Middleware that requires a valid Bearer token in the Authorization header.
     
@@ -92,8 +76,7 @@ class BearerAuthMiddleware:
     def __init__(
         self,
         app: Any,
-        provider: OAuthServerProvider,
-        required_scopes: Optional[List[str]] = None
+        required_scopes: list[str]
     ):
         """
         Initialize the middleware.
@@ -103,18 +86,15 @@ class BearerAuthMiddleware:
             provider: Authentication provider to validate tokens
             required_scopes: Optional list of scopes that the token must have
         """
-        self.app = AuthenticationMiddleware(
-            app, 
-            backend=BearerAuthBackend(provider, required_scopes)
-        )
-    
-    async def __call__(self, scope: Dict, receive: Callable, send: Callable) -> None:
-        """
-        Process the request and validate the bearer token.
+        self.app = app
+        self.required_scopes = required_scopes
+
+    async def __call__(self, scope: Scope, receive: Callable, send: Callable) -> None:
+        auth_credentials = scope.get('auth')
         
-        Args:
-            scope: ASGI scope
-            receive: ASGI receive function
-            send: ASGI send function
-        """
+        for required_scope in self.required_scopes:
+            # auth_credentials should always be provided; this is just paranoia
+            if auth_credentials is None or required_scope not in auth_credentials.scopes:
+                raise HTTPException(status_code=403, detail="Insufficient scope")
+
         await self.app(scope, receive, send)
