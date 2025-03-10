@@ -4,9 +4,9 @@ Handler for OAuth 2.0 Token Revocation.
 Corresponds to TypeScript file: src/server/auth/handlers/revoke.ts
 """
 
-from typing import Callable, Optional
+from typing import Callable
 
-from pydantic import BaseModel, ValidationError
+from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -18,7 +18,6 @@ from mcp.server.auth.middleware.client_auth import (
     ClientAuthRequest,
 )
 from mcp.server.auth.provider import OAuthServerProvider, OAuthTokenRevocationRequest
-
 
 
 class RevocationRequest(OAuthTokenRevocationRequest, ClientAuthRequest):
