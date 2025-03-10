@@ -5,13 +5,14 @@ Corresponds to TypeScript file: src/server/auth/provider.ts
 """
 
 from typing import List, Literal, Optional, Protocol
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from pydantic import AnyHttpUrl, BaseModel
+from pydantic import AnyHttpUrl, AnyUrl, BaseModel
 
 from mcp.server.auth.types import AuthInfo
 from mcp.shared.auth import (
     OAuthClientInformationFull,
-    OAuthTokens,
+    TokenSuccessResponse,
 )
 
 
@@ -27,7 +28,9 @@ class AuthorizationParams(BaseModel):
     code_challenge: str
     redirect_uri: AnyHttpUrl
 
-class AuthorizationCodeMeta(BaseModel):
+class AuthorizationCode(BaseModel):
+    code: str
+    scopes: list[str]
     issued_at: float
     client_id: str
     code_challenge: str
@@ -88,12 +91,33 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    async def create_authorization_code(
+    async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
     ) -> str:
         """
-        Generates and stores an authorization code as part of completing the /authorize
-        OAuth step.
+        Called as part of the /authorize endpoint, and returns a URL that the client
+        will be redirected to.
+        Many MCP implementations will redirect to a third-party provider to perform
+        a second OAuth exchange with that provider. In this sort of setup, the client
+        has an OAuth connection with the MCP server, and the MCP server has an OAuth
+        connection with the 3rd-party provider. At the end of this flow, the client
+        should be redirected to the redirect_uri from params.redirect_uri.
+
+        +--------+     +------------+     +-------------------+
+        |        |     |            |     |                   |
+        | Client | --> | MCP Server | --> | 3rd Party OAuth   |
+        |        |     |            |     | Server            |
+        +--------+     +------------+     +-------------------+
+                            |   ^                  |
+        +------------+      |   |                  |
+        |            |      |   |    Redirect      |
+        |redirect_uri|<-----+   +------------------+
+        |            |
+        +------------+          
+
+        Implementations will need to define another handler on the MCP server return
+        flow to perform the second redirect, and generates and stores an authorization
+        code as part of completing the OAuth authorization step.
 
         Implementations SHOULD generate an authorization code with at least 160 bits of
         entropy,
@@ -102,9 +126,9 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    async def load_authorization_code_metadata(
+    async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> AuthorizationCodeMeta | None:
+    ) -> AuthorizationCode | None:
         """
         Loads metadata for the authorization code challenge.
 
@@ -118,8 +142,8 @@ class OAuthServerProvider(Protocol):
         ...
 
     async def exchange_authorization_code(
-        self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> OAuthTokens:
+        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
+    ) -> TokenSuccessResponse:
         """
         Exchanges an authorization code for an access token.
 
@@ -137,7 +161,7 @@ class OAuthServerProvider(Protocol):
         client: OAuthClientInformationFull,
         refresh_token: str,
         scopes: Optional[List[str]] = None,
-    ) -> OAuthTokens:
+    ) -> TokenSuccessResponse:
         """
         Exchanges a refresh token for an access token.
 
@@ -178,3 +202,15 @@ class OAuthServerProvider(Protocol):
             request: The token revocation request.
         """
         ...
+
+def construct_redirect_uri(redirect_uri_base: str, authorization_code: AuthorizationCode, state: Optional[str]) -> str:
+    parsed_uri = urlparse(redirect_uri_base)
+    query_params = [(k, v) for k, vs in parse_qs(parsed_uri.query) for v in vs]
+    query_params.append(("code", authorization_code.code))
+    if state:
+        query_params.append(("state", state))
+
+    redirect_uri = urlunparse(
+        parsed_uri._replace(query=urlencode(query_params))
+    )
+    return redirect_uri

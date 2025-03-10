@@ -21,7 +21,7 @@ from mcp.server.auth.middleware.client_auth import (
     ClientAuthRequest,
 )
 from mcp.server.auth.provider import OAuthServerProvider
-from mcp.shared.auth import OAuthTokens
+from mcp.shared.auth import TokenErrorResponse, TokenSuccessResponse
 
 
 class AuthorizationCodeRequest(ClientAuthRequest):
@@ -54,53 +54,79 @@ AUTH_CODE_TTL = 300 # seconds
 def create_token_handler(
     provider: OAuthServerProvider, client_authenticator: ClientAuthenticator
 ) -> Callable:
+    def response(obj: TokenSuccessResponse | TokenErrorResponse):
+        return PydanticJSONResponse(
+            content=obj,
+            headers={
+                "Cache-Control": "no-store",
+                "Pragma": "no-cache",
+            },
+        )
+
     async def token_handler(request: Request):
         try:
             form_data = await request.form()
             token_request = TokenRequest.model_validate(dict(form_data)).root
-        except ValidationError as e:
-            raise InvalidRequestError(f"Invalid request body: {e}")
+        except ValidationError as validation_error:
+            return response(TokenErrorResponse(
+                error="invalid_request",
+                error_description="\n".join(e['msg'] for e in validation_error.errors())
+
+            ))
         client_info = await client_authenticator(token_request)
 
         if token_request.grant_type not in client_info.grant_types:
-            raise InvalidRequestError(
-                f"Unsupported grant type (supported grant types are "
+            return response(TokenErrorResponse(
+                error="unsupported_grant_type",
+                error_description=f"Unsupported grant type (supported grant types are "
                 f"{client_info.grant_types})"
-            )
+            ))
 
-        tokens: OAuthTokens
+        tokens: TokenSuccessResponse
 
         match token_request:
             case AuthorizationCodeRequest():
-                auth_code_metadata = await provider.load_authorization_code_metadata(
+                auth_code = await provider.load_authorization_code(
                     client_info, token_request.code
                 )
-                if auth_code_metadata is None or auth_code_metadata.client_id != token_request.client_id:
-                    raise InvalidRequestError("Invalid authorization code")
+                if auth_code is None or auth_code.client_id != token_request.client_id:
+                    # if the authoriation code belongs to a different client, pretend it doesn't exist
+                    return response(TokenErrorResponse(
+                        error="invalid_grant",
+                        error_description=f"authorization code does not exist"
+                    ))
 
                 # make auth codes expire after a deadline
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.5
-                expires_at = auth_code_metadata.issued_at + AUTH_CODE_TTL
+                expires_at = auth_code.issued_at + AUTH_CODE_TTL
                 if expires_at < time.time():
-                    raise InvalidRequestError("authorization code has expired")
+                    return response(TokenErrorResponse(
+                        error="invalid_grant",
+                        error_description=f"authorization code has expired"
+                    ))
 
                 # verify redirect_uri doesn't change between /authorize and /tokens
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
-                if token_request.redirect_uri != auth_code_metadata.redirect_uri:
-                    raise InvalidRequestError("redirect_uri did not match redirect_uri used when authorization code was created")
+                if token_request.redirect_uri != auth_code.redirect_uri:
+                    return response(TokenErrorResponse(
+                        error="invalid_request",
+                        error_description=f"redirect_uri did not match redirect_uri used when authorization code was created"
+                    ))
 
                 # Verify PKCE code verifier
                 sha256 = hashlib.sha256(token_request.code_verifier.encode()).digest()
                 hashed_code_verifier = base64.urlsafe_b64encode(sha256).decode().rstrip("=")
 
-                if hashed_code_verifier != auth_code_metadata.code_challenge:
-                    raise InvalidRequestError(
-                        "code_verifier does not match the challenge"
-                    )
+                if hashed_code_verifier != auth_code.code_challenge:
+                    # see https://datatracker.ietf.org/doc/html/rfc7636#section-4.6
+                    return response(TokenErrorResponse(
+                        error="invalid_grant",
+                        error_description=f"incorrect code_verifier"
+                    ))
 
                 # Exchange authorization code for tokens
                 tokens = await provider.exchange_authorization_code(
-                    client_info, token_request.code
+                    client_info, auth_code
                 )
 
             case RefreshTokenRequest():
@@ -112,12 +138,6 @@ def create_token_handler(
                     client_info, token_request.refresh_token, scopes
                 )
 
-        return PydanticJSONResponse(
-            content=tokens,
-            headers={
-                "Cache-Control": "no-store",
-                "Pragma": "no-cache",
-            },
-        )
+        return response(tokens)
 
     return token_handler
