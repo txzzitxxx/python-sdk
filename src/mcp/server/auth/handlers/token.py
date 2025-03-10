@@ -55,7 +55,10 @@ def create_token_handler(
         client_info = await client_authenticator(token_request)
 
         if token_request.grant_type not in client_info.grant_types:
-            raise InvalidRequestError(f"Unsupported grant type (supported grant types are {client_info.grant_types})")
+            raise InvalidRequestError(
+                f"Unsupported grant type (supported grant types are "
+                f"{client_info.grant_types})"
+            )
 
         tokens: OAuthTokens
 

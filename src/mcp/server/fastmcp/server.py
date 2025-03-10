@@ -494,7 +494,6 @@ class FastMCP:
 
         async def handle_sse(request) -> EventSourceResponse:
             # Add client ID from auth context into request context if available
-            request_meta = {}
 
             async with sse.connect_sse(
                 request.scope, request.receive, request._send

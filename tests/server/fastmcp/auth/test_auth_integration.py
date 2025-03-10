@@ -324,7 +324,9 @@ class TestAuthEndpoints:
         assert client_info["redirect_uris"] == ["https://client.example.com/callback"]
 
         # Verify that the client was registered
-        # assert await mock_oauth_provider.clients_store.get_client(client_info["client_id"]) is not None
+        # assert await mock_oauth_provider.clients_store.get_client(
+        #     client_info["client_id"]
+        # ) is not None
 
     @pytest.mark.anyio
     async def test_authorization_flow(
@@ -553,7 +555,8 @@ class TestFastMCPWithAuth:
             assert sse.data.startswith("/messages/?session_id=")
             messages_uri = sse.data
 
-            # verify that we can now post to the /messages endpoint, and get a response on the /sse endpoint
+            # verify that we can now post to the /messages endpoint, and get a response
+            # on the /sse endpoint
             response = await test_client.post(
                 messages_uri,
                 headers={"Authorization": authorization},
