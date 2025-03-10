@@ -6,19 +6,15 @@ handle streaming responses like SSE where the app doesn't terminate until
 the connection is closed.
 """
 
+import asyncio
 import typing
-from typing import Any, Dict, List, Optional, Tuple, cast
+from typing import Any, Dict, Tuple
 
 import anyio
 import anyio.streams.memory
-from anyio.abc import TaskStatus
-import httpx
-from httpx._transports.asgi import ASGIResponseStream
-from httpx._transports.base import AsyncBaseTransport
 from httpx._models import Request, Response
+from httpx._transports.base import AsyncBaseTransport
 from httpx._types import AsyncByteStream
-import asyncio
-
 
 
 class StreamingASGITransport(AsyncBaseTransport):
@@ -89,7 +85,9 @@ class StreamingASGITransport(AsyncBaseTransport):
 
         # Synchronization for streaming response
         asgi_send_channel, asgi_receive_channel = anyio.create_memory_object_stream(100)
-        content_send_channel, content_receive_channel = anyio.create_memory_object_stream[bytes](100)
+        content_send_channel, content_receive_channel = (
+            anyio.create_memory_object_stream[bytes](100)
+        )
 
         # ASGI callables.
         async def receive() -> Dict[str, Any]:
@@ -118,26 +116,22 @@ class StreamingASGITransport(AsyncBaseTransport):
             except Exception:
                 if self.raise_app_exceptions:
                     raise
-                
+
                 if not response_started:
-                    await asgi_send_channel.send({
-                        "type": "http.response.start",
-                        "status": 500,
-                        "headers": []
-                    })
-                
-                await asgi_send_channel.send({
-                    "type": "http.response.body",
-                    "body": b"",
-                    "more_body": False
-                })
+                    await asgi_send_channel.send(
+                        {"type": "http.response.start", "status": 500, "headers": []}
+                    )
+
+                await asgi_send_channel.send(
+                    {"type": "http.response.body", "body": b"", "more_body": False}
+                )
             finally:
                 await asgi_send_channel.aclose()
 
         # Process messages from the ASGI app
         async def process_messages() -> None:
             nonlocal status_code, response_headers, response_started
-            
+
             try:
                 async with asgi_receive_channel:
                     async for message in asgi_receive_channel:
@@ -146,7 +140,7 @@ class StreamingASGITransport(AsyncBaseTransport):
                             status_code = message["status"]
                             response_headers = message.get("headers", [])
                             response_started = True
-                            
+
                             # As soon as we have headers, we can return a response
                             initial_response_ready.set()
 
@@ -169,29 +163,33 @@ class StreamingASGITransport(AsyncBaseTransport):
         # Create tasks for running the app and processing messages
         app_task = asyncio.create_task(run_app())
         process_task = asyncio.create_task(process_messages())
-        
+
         # Wait for the initial response or timeout
         await initial_response_ready.wait()
 
         # Create a streaming response
-        return Response(status_code, headers=response_headers, stream=StreamingASGIResponseStream(content_receive_channel))
+        return Response(
+            status_code,
+            headers=response_headers,
+            stream=StreamingASGIResponseStream(content_receive_channel),
+        )
 
 
 class StreamingASGIResponseStream(AsyncByteStream):
     """
     A modified ASGIResponseStream that supports streaming responses.
-    
+
     This class extends the standard ASGIResponseStream to handle cases where
     the response body continues to be generated after the initial response
     is returned.
     """
-    
+
     def __init__(
-        self, 
+        self,
         receive_channel: anyio.streams.memory.MemoryObjectReceiveStream[bytes],
     ) -> None:
         self.receive_channel = receive_channel
-        
+
     async def __aiter__(self) -> typing.AsyncIterator[bytes]:
         async for chunk in self.receive_channel:
             yield chunk
