@@ -4,7 +4,7 @@ OAuth server provider interfaces for MCP authorization.
 Corresponds to TypeScript file: src/server/auth/provider.ts
 """
 
-from typing import List, Optional, Protocol
+from typing import List, Literal, Optional, Protocol
 
 from pydantic import AnyHttpUrl, BaseModel
 
@@ -28,6 +28,18 @@ class AuthorizationParams(BaseModel):
     code_challenge: str
     redirect_uri: AnyHttpUrl
 
+class AuthorizationCodeMeta(BaseModel):
+    issued_at: float
+    client_id: str
+    code_challenge: str
+    redirect_uri: AnyHttpUrl
+class OAuthTokenRevocationRequest(BaseModel):
+    """
+    # See https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+    """
+
+    token: str
+    token_type_hint: Optional[Literal["access_token", "refresh_token"]] = None
 
 class OAuthRegisteredClientsStore(Protocol):
     """
@@ -91,11 +103,11 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    async def challenge_for_authorization_code(
+    async def load_authorization_code_metadata(
         self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> str | None:
+    ) -> AuthorizationCodeMeta | None:
         """
-        Returns the code_challenge that was used when the indicated authorization began.
+        Loads metadata for the authorization code challenge.
 
         Args:
             client: The client that requested the authorization code.

@@ -19,9 +19,11 @@ from starlette.routing import Mount
 
 from mcp.server.auth.errors import InvalidTokenError
 from mcp.server.auth.provider import (
+    AuthorizationCodeMeta,
     AuthorizationParams,
     OAuthRegisteredClientsStore,
     OAuthServerProvider,
+    OAuthTokenRevocationRequest,
 )
 from mcp.server.auth.router import (
     ClientRegistrationOptions,
@@ -32,7 +34,6 @@ from mcp.server.auth.types import AuthInfo
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import (
     OAuthClientInformationFull,
-    OAuthTokenRevocationRequest,
     OAuthTokens,
 )
 from mcp.types import JSONRPCRequest
@@ -74,32 +75,19 @@ class MockOAuthProvider(OAuthServerProvider):
         code = f"code_{int(time.time())}"
 
         # Store the code for later verification
-        self.auth_codes[code] = {
-            "client_id": client.client_id,
-            "code_challenge": params.code_challenge,
-            "redirect_uri": params.redirect_uri,
-            "expires_at": int(time.time()) + 600,  # 10 minutes
-        }
+        self.auth_codes[code] = AuthorizationCodeMeta(
+            client_id= client.client_id,
+            code_challenge= params.code_challenge,
+            redirect_uri= params.redirect_uri,
+            issued_at= time.time(),
+        )
 
         return code
 
-    async def challenge_for_authorization_code(
+    async def load_authorization_code_metadata(
         self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> str:
-        # Get the stored code info
-        code_info = self.auth_codes.get(authorization_code)
-        if not code_info:
-            raise InvalidTokenError("Invalid authorization code")
-
-        # Check if code is expired
-        if code_info["expires_at"] < int(time.time()):
-            raise InvalidTokenError("Authorization code has expired")
-
-        # Check if the code was issued to this client
-        if code_info["client_id"] != client.client_id:
-            raise InvalidTokenError("Authorization code was not issued to this client")
-
-        return code_info["code_challenge"]
+    ) -> AuthorizationCodeMeta | None:
+        return self.auth_codes.get(authorization_code)
 
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
@@ -108,14 +96,6 @@ class MockOAuthProvider(OAuthServerProvider):
         code_info = self.auth_codes.get(authorization_code)
         if not code_info:
             raise InvalidTokenError("Invalid authorization code")
-
-        # Check if code is expired
-        if code_info["expires_at"] < int(time.time()):
-            raise InvalidTokenError("Authorization code has expired")
-
-        # Check if the code was issued to this client
-        if code_info["client_id"] != client.client_id:
-            raise InvalidTokenError("Authorization code was not issued to this client")
 
         # Generate an access token and refresh token
         access_token = f"access_{secrets.token_hex(32)}"
@@ -436,6 +416,7 @@ class TestAuthEndpoints:
                 "client_secret": client_info["client_secret"],
                 "code": auth_code,
                 "code_verifier": code_verifier,
+                "redirect_uri": "https://client.example.com/callback",
             },
         )
         assert response.status_code == 200
@@ -465,6 +446,7 @@ class TestAuthEndpoints:
                 "client_id": client_info["client_id"],
                 "client_secret": client_info["client_secret"],
                 "refresh_token": refresh_token,
+                "redirect_uri": "https://client.example.com/callback",
             },
         )
         assert response.status_code == 200
@@ -585,6 +567,7 @@ class TestFastMCPWithAuth:
                 "client_secret": client_info["client_secret"],
                 "code": auth_code,
                 "code_verifier": code_verifier,
+                "redirect_uri": "https://client.example.com/callback",
             },
         )
         assert response.status_code == 200
