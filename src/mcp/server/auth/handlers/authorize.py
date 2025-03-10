@@ -39,9 +39,7 @@ class AuthorizationRequest(BaseModel):
         description="Optional scope; if specified, should be "
         "a space-separated list of scope strings",
     )
-
-    class Config:
-        extra = "ignore"
+    
 
 
 def validate_scope(

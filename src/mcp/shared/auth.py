@@ -11,25 +11,21 @@ from pydantic import AnyHttpUrl, BaseModel, Field
 
 class OAuthErrorResponse(BaseModel):
     """
-    OAuth 2.1 error response.
-
-    Corresponds to OAuthErrorResponseSchema in src/shared/auth.ts
+    See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
     """
 
-    error: str
+    error: Literal["invalid_request", "invalid_client", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope"]
     error_description: Optional[str] = None
     error_uri: Optional[AnyHttpUrl] = None
 
 
 class OAuthTokens(BaseModel):
     """
-    OAuth 2.1 token response.
-
-    Corresponds to OAuthTokensSchema in src/shared/auth.ts
+    See https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
     """
 
     access_token: str
-    token_type: str
+    token_type: Literal["bearer"] = "bearer"
     expires_in: Optional[int] = None
     scope: Optional[str] = None
     refresh_token: Optional[str] = None

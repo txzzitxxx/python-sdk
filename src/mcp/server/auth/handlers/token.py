@@ -6,9 +6,10 @@ Corresponds to TypeScript file: src/server/auth/handlers/token.ts
 
 import base64
 import hashlib
+import time
 from typing import Annotated, Callable, Literal, Optional, Union
 
-from pydantic import Field, RootModel, ValidationError
+from pydantic import AnyHttpUrl, Field, RootModel, ValidationError
 from starlette.requests import Request
 
 from mcp.server.auth.errors import (
@@ -24,13 +25,19 @@ from mcp.shared.auth import OAuthTokens
 
 
 class AuthorizationCodeRequest(ClientAuthRequest):
+    # See https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
     grant_type: Literal["authorization_code"]
     code: str = Field(..., description="The authorization code")
+    redirect_uri: AnyHttpUrl | None = Field(
+        ..., description="Must be the same as redirect URI provided in /authorize"
+    )
+    client_id: str
+    # See https://datatracker.ietf.org/doc/html/rfc7636#section-4.5
     code_verifier: str = Field(..., description="PKCE code verifier")
-    # TODO: this should take redirect_uri
 
 
 class RefreshTokenRequest(ClientAuthRequest):
+    # See https://datatracker.ietf.org/doc/html/rfc6749#section-6
     grant_type: Literal["refresh_token"]
     refresh_token: str = Field(..., description="The refresh token")
     scope: Optional[str] = Field(None, description="Optional scope parameter")
@@ -42,7 +49,7 @@ class TokenRequest(RootModel):
         Field(discriminator="grant_type"),
     ]
 
-
+AUTH_CODE_TTL = 300 # seconds
 
 def create_token_handler(
     provider: OAuthServerProvider, client_authenticator: ClientAuthenticator
@@ -65,22 +72,28 @@ def create_token_handler(
 
         match token_request:
             case AuthorizationCodeRequest():
-                # TODO: verify that the redirect URIs match
-                # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
-                # TODO: enforce TTL on the authorization code
-
-                # Verify PKCE code verifier
-                expected_challenge = await provider.challenge_for_authorization_code(
+                auth_code_metadata = await provider.load_authorization_code_metadata(
                     client_info, token_request.code
                 )
-                if expected_challenge is None:
+                if auth_code_metadata is None or auth_code_metadata.client_id != token_request.client_id:
                     raise InvalidRequestError("Invalid authorization code")
 
-                # Calculate challenge from verifier
-                sha256 = hashlib.sha256(token_request.code_verifier.encode()).digest()
-                actual_challenge = base64.urlsafe_b64encode(sha256).decode().rstrip("=")
+                # make auth codes expire after a deadline
+                # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.5
+                expires_at = auth_code_metadata.issued_at + AUTH_CODE_TTL
+                if expires_at < time.time():
+                    raise InvalidRequestError("authorization code has expired")
 
-                if actual_challenge != expected_challenge:
+                # verify redirect_uri doesn't change between /authorize and /tokens
+                # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
+                if token_request.redirect_uri != auth_code_metadata.redirect_uri:
+                    raise InvalidRequestError("redirect_uri did not match redirect_uri used when authorization code was created")
+
+                # Verify PKCE code verifier
+                sha256 = hashlib.sha256(token_request.code_verifier.encode()).digest()
+                hashed_code_verifier = base64.urlsafe_b64encode(sha256).decode().rstrip("=")
+
+                if hashed_code_verifier != auth_code_metadata.code_challenge:
                     raise InvalidRequestError(
                         "code_verifier does not match the challenge"
                     )
