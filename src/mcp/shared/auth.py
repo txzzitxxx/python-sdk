@@ -4,8 +4,9 @@ Authorization types and models for MCP OAuth implementation.
 Corresponds to TypeScript file: src/shared/auth.ts
 """
 
-from typing import Any, Dict, List, Optional, Union
-from pydantic import AnyHttpUrl, BaseModel, Field, field_validator, model_validator
+from typing import Any, List, Optional
+
+from pydantic import AnyHttpUrl, BaseModel, Field
 
 
 class OAuthErrorResponse(BaseModel):
@@ -14,6 +15,7 @@ class OAuthErrorResponse(BaseModel):
 
     Corresponds to OAuthErrorResponseSchema in src/shared/auth.ts
     """
+
     error: str
     error_description: Optional[str] = None
     error_uri: Optional[AnyHttpUrl] = None
@@ -25,6 +27,7 @@ class OAuthTokens(BaseModel):
 
     Corresponds to OAuthTokensSchema in src/shared/auth.ts
     """
+
     access_token: str
     token_type: str
     expires_in: Optional[int] = None
@@ -38,6 +41,7 @@ class OAuthClientMetadata(BaseModel):
 
     Corresponds to OAuthClientMetadataSchema in src/shared/auth.ts
     """
+
     redirect_uris: List[AnyHttpUrl] = Field(..., min_length=1)
     token_endpoint_auth_method: Optional[str] = None
     grant_types: Optional[List[str]] = None
@@ -61,6 +65,7 @@ class OAuthClientInformation(BaseModel):
 
     Corresponds to OAuthClientInformationSchema in src/shared/auth.ts
     """
+
     client_id: str
     client_secret: Optional[str] = None
     client_id_issued_at: Optional[int] = None
@@ -74,6 +79,7 @@ class OAuthClientInformationFull(OAuthClientMetadata, OAuthClientInformation):
 
     Corresponds to OAuthClientInformationFullSchema in src/shared/auth.ts
     """
+
     pass
 
 
@@ -83,6 +89,7 @@ class OAuthClientRegistrationError(BaseModel):
 
     Corresponds to OAuthClientRegistrationErrorSchema in src/shared/auth.ts
     """
+
     error: str
     error_description: Optional[str] = None
 
@@ -93,6 +100,7 @@ class OAuthTokenRevocationRequest(BaseModel):
 
     Corresponds to OAuthTokenRevocationRequestSchema in src/shared/auth.ts
     """
+
     token: str
     token_type_hint: Optional[str] = None
 
@@ -103,6 +111,7 @@ class OAuthMetadata(BaseModel):
 
     Corresponds to OAuthMetadataSchema in src/shared/auth.ts
     """
+
     issuer: str
     authorization_endpoint: str
     token_endpoint: str

@@ -34,7 +34,6 @@ See SseServerTransport class documentation for more details.
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
-from typing_extensions import deprecated
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -45,7 +44,7 @@ from sse_starlette import EventSourceResponse
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
-from sse_starlette import EventSourceResponse
+from typing_extensions import deprecated
 
 import mcp.types as types
 
