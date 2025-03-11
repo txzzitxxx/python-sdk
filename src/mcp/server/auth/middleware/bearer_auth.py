@@ -25,7 +25,7 @@ class AuthenticatedUser(SimpleUser):
     """User with authentication info."""
 
     def __init__(self, auth_info: AuthInfo):
-        super().__init__(auth_info.user_id or "anonymous")
+        super().__init__(auth_info.client_id)
         self.auth_info = auth_info
         self.scopes = auth_info.scopes
 

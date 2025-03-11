@@ -31,10 +31,18 @@ class AuthorizationParams(BaseModel):
 class AuthorizationCode(BaseModel):
     code: str
     scopes: list[str]
-    issued_at: float
+    expires_at: float
     client_id: str
     code_challenge: str
     redirect_uri: AnyHttpUrl
+
+class RefreshToken(BaseModel):
+    token: str
+    client_id: str
+    scopes: List[str]
+    expires_at: Optional[int] = None
+
+
 class OAuthTokenRevocationRequest(BaseModel):
     """
     # See https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
@@ -156,11 +164,14 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
+    async def load_refresh_token(self, client: OAuthClientInformationFull, refresh_token: str) -> RefreshToken | None: 
+        ...
+
     async def exchange_refresh_token(
         self,
         client: OAuthClientInformationFull,
-        refresh_token: str,
-        scopes: Optional[List[str]] = None,
+        refresh_token: RefreshToken,
+        scopes: List[str],
     ) -> TokenSuccessResponse:
         """
         Exchanges a refresh token for an access token.
