@@ -6,6 +6,8 @@ Corresponds to TypeScript file: src/server/auth/errors.ts
 
 from typing import Dict
 
+from pydantic import ValidationError
+
 
 class OAuthError(Exception):
     """
@@ -143,3 +145,6 @@ class InsufficientScopeError(OAuthError):
     """
 
     error_code = "insufficient_scope"
+
+def stringify_pydantic_error(validation_error: ValidationError) -> str:
+    return "\n".join(f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}" for e in validation_error.errors())

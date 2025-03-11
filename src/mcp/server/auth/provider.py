@@ -72,15 +72,12 @@ class OAuthRegisteredClientsStore(Protocol):
 
     async def register_client(
         self, client_info: OAuthClientInformationFull
-    ) -> Optional[OAuthClientInformationFull]:
+    ) -> None:
         """
-        Registers a new client and returns client information.
+        Registers a new client
 
         Args:
-            metadata: The client metadata to register.
-
-        Returns:
-            The client information, or None if registration failed.
+            client_info: The client metadata to register.
         """
         ...
 

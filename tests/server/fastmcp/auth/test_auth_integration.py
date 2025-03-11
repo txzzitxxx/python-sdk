@@ -682,6 +682,68 @@ class TestAuthEndpoints:
         # ) is not None
         
     @pytest.mark.anyio
+    async def test_client_registration_missing_required_fields(
+        self, test_client: httpx.AsyncClient
+    ):
+        """Test client registration with missing required fields."""
+        # Missing redirect_uris which is a required field
+        client_metadata = {
+            "client_name": "Test Client",
+            "client_uri": "https://client.example.com",
+        }
+
+        response = await test_client.post(
+            "/register",
+            json=client_metadata,
+        )
+        assert response.status_code == 400
+        error_data = response.json()
+        assert "error" in error_data
+        assert error_data["error"] == "invalid_client_metadata"
+        assert error_data["error_description"] == "redirect_uris: Field required"
+        
+    @pytest.mark.anyio
+    async def test_client_registration_invalid_uri(
+        self, test_client: httpx.AsyncClient
+    ):
+        """Test client registration with invalid URIs."""
+        # Invalid redirect_uri format
+        client_metadata = {
+            "redirect_uris": ["not-a-valid-uri"],
+            "client_name": "Test Client",
+        }
+
+        response = await test_client.post(
+            "/register",
+            json=client_metadata,
+        )
+        assert response.status_code == 400
+        error_data = response.json()
+        assert "error" in error_data
+        assert error_data["error"] == "invalid_client_metadata"
+        assert error_data["error_description"] == "redirect_uris.0: Input should be a valid URL, relative URL without a base"
+        
+    @pytest.mark.anyio
+    async def test_client_registration_empty_redirect_uris(
+        self, test_client: httpx.AsyncClient
+    ):
+        """Test client registration with empty redirect_uris array."""
+        client_metadata = {
+            "redirect_uris": [],  # Empty array
+            "client_name": "Test Client",
+        }
+
+        response = await test_client.post(
+            "/register",
+            json=client_metadata,
+        )
+        assert response.status_code == 400
+        error_data = response.json()
+        assert "error" in error_data
+        assert error_data["error"] == "invalid_client_metadata"
+        assert error_data["error_description"] == "redirect_uris: List should have at least 1 item after validation, not 0"
+        
+    @pytest.mark.anyio
     async def test_authorize_form_post(
         self, test_client: httpx.AsyncClient, mock_oauth_provider: MockOAuthProvider
     ):

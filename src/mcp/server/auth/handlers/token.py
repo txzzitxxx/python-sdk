@@ -14,6 +14,7 @@ from starlette.requests import Request
 
 from mcp.server.auth.errors import (
     InvalidRequestError,
+    stringify_pydantic_error,
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.middleware.client_auth import (
@@ -74,7 +75,7 @@ def create_token_handler(
         except ValidationError as validation_error:
             return response(TokenErrorResponse(
                 error="invalid_request",
-                error_description="\n".join(e['msg'] for e in validation_error.errors())
+                error_description=stringify_pydantic_error(validation_error)
 
             ))
         client_info = await client_authenticator(token_request)
