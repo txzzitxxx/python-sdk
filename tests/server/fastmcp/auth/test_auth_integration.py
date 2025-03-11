@@ -995,11 +995,13 @@ class TestFastMCPWithAuth:
             return f"Result: {x}"
 
         async with anyio.create_task_group() as task_group:
-            transport = StreamingASGITransport(app=mcp.starlette_app(), task_group=task_group)  # pyright: ignore
+            transport = StreamingASGITransport(
+                app=mcp.starlette_app(),
+                task_group=task_group,
+            )
             test_client = httpx.AsyncClient(
                 transport=transport, base_url="http://mcptest.com"
             )
-            # test_client = httpx.AsyncClient(app=mcp.starlette_app(), base_url="http://mcptest.com")
 
             # Test metadata endpoint
             response = await test_client.get("/.well-known/oauth-authorization-server")
@@ -1090,8 +1092,8 @@ class TestFastMCPWithAuth:
                 assert sse.data.startswith("/messages/?session_id=")
                 messages_uri = sse.data
 
-                # verify that we can now post to the /messages endpoint, and get a response
-                # on the /sse endpoint
+                # verify that we can now post to the /messages endpoint,
+                # and get a response on the /sse endpoint
                 response = await test_client.post(
                     messages_uri,
                     headers={"Authorization": authorization},

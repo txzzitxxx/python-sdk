@@ -12,7 +12,6 @@ from typing import Any, Dict, Tuple
 import anyio
 import anyio.abc
 import anyio.streams.memory
-
 from httpx._models import Request, Response
 from httpx._transports.base import AsyncBaseTransport
 from httpx._types import AsyncByteStream
