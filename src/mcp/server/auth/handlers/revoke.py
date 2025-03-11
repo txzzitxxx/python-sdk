@@ -4,6 +4,7 @@ Handler for OAuth 2.0 Token Revocation.
 Corresponds to TypeScript file: src/server/auth/handlers/revoke.ts
 """
 
+from tokenize import Token
 from typing import Callable
 
 from pydantic import ValidationError
@@ -12,12 +13,15 @@ from starlette.responses import Response
 
 from mcp.server.auth.errors import (
     InvalidRequestError,
+    stringify_pydantic_error,
 )
 from mcp.server.auth.middleware.client_auth import (
     ClientAuthenticator,
     ClientAuthRequest,
 )
 from mcp.server.auth.provider import OAuthServerProvider, OAuthTokenRevocationRequest
+from mcp.server.auth.json_response import PydanticJSONResponse
+from mcp.shared.auth import TokenErrorResponse
 
 
 class RevocationRequest(OAuthTokenRevocationRequest, ClientAuthRequest):
@@ -35,7 +39,10 @@ def create_revocation_handler(
             form_data = await request.form()
             revocation_request = RevocationRequest.model_validate(dict(form_data))
         except ValidationError as e:
-            raise InvalidRequestError(f"Invalid request body: {e}")
+            return PydanticJSONResponse(status_code=400,content=TokenErrorResponse(
+                error="invalid_request",
+                error_description=stringify_pydantic_error(e)
+            ))
 
         # Authenticate client
         client_auth_result = await client_authenticator(revocation_request)
