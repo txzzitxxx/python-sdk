@@ -189,19 +189,14 @@ class MockOAuthProvider(OAuthServerProvider):
             refresh_token=new_refresh_token,
         )
 
-    async def verify_access_token(self, token: str) -> AuthInfo:
-        # Check if token exists
-        if token not in self.tokens:
-            raise InvalidTokenError("Invalid access token")
-
-        # Get token info
-        token_info = self.tokens[token]
+    async def load_access_token(self, token: str) -> AuthInfo | None:
+        token_info = self.tokens.get(token)
 
         # Check if token is expired
-        if token_info.expires_at < int(time.time()):
-            raise InvalidTokenError("Access token has expired")
+        # if token_info.expires_at < int(time.time()):
+        #     raise InvalidTokenError("Access token has expired")
 
-        return AuthInfo(
+        return token_info and AuthInfo(
             token=token,
             client_id=token_info.client_id,
             scopes=token_info.scopes,
@@ -852,7 +847,8 @@ class TestAuthEndpoints:
         refresh_token = token_response["refresh_token"]
 
         # Create a test client with the token
-        auth_info = await mock_oauth_provider.verify_access_token(access_token)
+        auth_info = await mock_oauth_provider.load_access_token(access_token)
+        assert auth_info
         assert auth_info.client_id == client_info["client_id"]
         assert "read" in auth_info.scopes
         assert "write" in auth_info.scopes
@@ -888,10 +884,9 @@ class TestAuthEndpoints:
         assert response.status_code == 200
 
         # Verify that the token was revoked
-        with pytest.raises(InvalidTokenError):
-            await mock_oauth_provider.verify_access_token(
-                new_token_response["access_token"]
-            )
+        assert await mock_oauth_provider.load_access_token(
+            new_token_response["access_token"]
+        ) is None
 
 
 class TestFastMCPWithAuth:

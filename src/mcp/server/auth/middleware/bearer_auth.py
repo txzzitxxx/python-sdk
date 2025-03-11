@@ -53,7 +53,10 @@ class BearerAuthBackend(AuthenticationBackend):
 
         try:
             # Validate the token with the provider
-            auth_info = await self.provider.verify_access_token(token)
+            auth_info = await self.provider.load_access_token(token)
+
+            if not auth_info:
+                raise InvalidTokenError("Invalid access token")
 
             if auth_info.expires_at and auth_info.expires_at < int(time.time()):
                 raise InvalidTokenError("Token has expired")

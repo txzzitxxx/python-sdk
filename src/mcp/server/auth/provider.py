@@ -183,9 +183,7 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    # TODO: consider methods to generate refresh tokens and access tokens
-
-    async def verify_access_token(self, token: str) -> AuthInfo:
+    async def load_access_token(self, token: str) -> AuthInfo | None:
         """
         Verifies an access token and returns information about it.
 
@@ -193,7 +191,7 @@ class OAuthServerProvider(Protocol):
             token: The access token to verify.
 
         Returns:
-            Information about the verified token.
+            Information about the verified token, or None if the token is invalid.
         """
         ...
 
