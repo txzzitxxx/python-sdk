@@ -7,7 +7,7 @@ Corresponds to TypeScript file: src/server/auth/handlers/token.ts
 import base64
 import hashlib
 import time
-from typing import Annotated, Callable, Literal, Optional, Union
+from typing import Annotated, Callable, Literal
 
 from pydantic import AnyHttpUrl, Field, RootModel, ValidationError
 from starlette.requests import Request
@@ -42,12 +42,12 @@ class RefreshTokenRequest(ClientAuthRequest):
     # See https://datatracker.ietf.org/doc/html/rfc6749#section-6
     grant_type: Literal["refresh_token"]
     refresh_token: str = Field(..., description="The refresh token")
-    scope: Optional[str] = Field(None, description="Optional scope parameter")
+    scope: str | None = Field(None, description="Optional scope parameter")
 
 
 class TokenRequest(RootModel):
     root: Annotated[
-        Union[AuthorizationCodeRequest, RefreshTokenRequest],
+        AuthorizationCodeRequest | RefreshTokenRequest,
         Field(discriminator="grant_type"),
     ]
 

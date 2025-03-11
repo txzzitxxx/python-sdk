@@ -4,7 +4,7 @@ OAuth server provider interfaces for MCP authorization.
 Corresponds to TypeScript file: src/server/auth/provider.ts
 """
 
-from typing import List, Literal, Optional, Protocol
+from typing import Literal, Protocol
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, BaseModel
@@ -23,8 +23,8 @@ class AuthorizationParams(BaseModel):
     Corresponds to AuthorizationParams in src/server/auth/provider.ts
     """
 
-    state: Optional[str] = None
-    scopes: Optional[List[str]] = None
+    state: str | None = None
+    scopes: list[str] | None = None
     code_challenge: str
     redirect_uri: AnyHttpUrl
 
@@ -41,8 +41,8 @@ class AuthorizationCode(BaseModel):
 class RefreshToken(BaseModel):
     token: str
     client_id: str
-    scopes: List[str]
-    expires_at: Optional[int] = None
+    scopes: list[str]
+    expires_at: int | None = None
 
 
 class OAuthTokenRevocationRequest(BaseModel):
@@ -51,7 +51,7 @@ class OAuthTokenRevocationRequest(BaseModel):
     """
 
     token: str
-    token_type_hint: Optional[Literal["access_token", "refresh_token"]] = None
+    token_type_hint: Literal["access_token", "refresh_token"] | None = None
 
 
 class OAuthRegisteredClientsStore(Protocol):
@@ -61,7 +61,7 @@ class OAuthRegisteredClientsStore(Protocol):
     Corresponds to OAuthRegisteredClientsStore in src/server/auth/clients.ts
     """
 
-    async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
+    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """
         Retrieves client information by client ID.
 
@@ -170,7 +170,7 @@ class OAuthServerProvider(Protocol):
         self,
         client: OAuthClientInformationFull,
         refresh_token: RefreshToken,
-        scopes: List[str],
+        scopes: list[str],
     ) -> TokenSuccessResponse:
         """
         Exchanges a refresh token for an access token.

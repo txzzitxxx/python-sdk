@@ -4,13 +4,13 @@ Handler for OAuth 2.0 Authorization Server Metadata.
 Corresponds to TypeScript file: src/server/auth/handlers/metadata.ts
 """
 
-from typing import Any, Callable, Dict
+from typing import Any, Callable
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 
-def create_metadata_handler(metadata: Dict[str, Any]) -> Callable:
+def create_metadata_handler(metadata: dict[str, Any]) -> Callable:
     """
     Create a handler for OAuth 2.0 Authorization Server Metadata.
 

@@ -5,7 +5,7 @@ Corresponds to TypeScript file: src/server/auth/handlers/authorize.ts
 """
 
 import logging
-from typing import Callable, Literal, Optional, Union
+from typing import Callable, Literal
 from urllib.parse import urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, AnyUrl, BaseModel, Field, RootModel, ValidationError
@@ -44,8 +44,8 @@ class AuthorizationRequest(BaseModel):
     code_challenge_method: Literal["S256"] = Field(
         "S256", description="PKCE code challenge method, must be S256"
     )
-    state: Optional[str] = Field(None, description="Optional state parameter")
-    scope: Optional[str] = Field(
+    state: str | None = Field(None, description="Optional state parameter")
+    scope: str | None = Field(
         None,
         description="Optional scope; if specified, should be "
         "a space-separated list of scope strings",
@@ -97,14 +97,14 @@ ErrorCode = Literal[
 class ErrorResponse(BaseModel):
     error: ErrorCode
     error_description: str
-    error_uri: Optional[AnyUrl] = None
+    error_uri: AnyUrl | None = None
     # must be set if provided in the request
-    state: Optional[str]
+    state: str | None = None
 
 
 def best_effort_extract_string(
     key: str, params: None | FormData | QueryParams
-) -> Optional[str]:
+) -> str | None:
     if params is None:
         return None
     value = params.get(key)
@@ -257,7 +257,7 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
 
 
 def create_error_redirect(
-    redirect_uri: AnyUrl, error: Union[Exception, ErrorResponse]
+    redirect_uri: AnyUrl, error: Exception | ErrorResponse
 ) -> str:
     parsed_uri = urlparse(str(redirect_uri))
 

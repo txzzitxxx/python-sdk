@@ -5,13 +5,10 @@ Corresponds to TypeScript file: src/server/auth/middleware/clientAuth.ts
 """
 
 import time
-from typing import Optional
 
 from pydantic import BaseModel
 
-from mcp.server.auth.errors import (
-    InvalidClientError,
-)
+from mcp.server.auth.errors import InvalidClientError
 from mcp.server.auth.provider import OAuthRegisteredClientsStore
 from mcp.shared.auth import OAuthClientInformationFull
 
@@ -25,7 +22,7 @@ class ClientAuthRequest(BaseModel):
     """
 
     client_id: str
-    client_secret: Optional[str] = None
+    client_secret: str | None = None
 
 
 class ClientAuthenticator:
