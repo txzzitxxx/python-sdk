@@ -7,7 +7,7 @@ Corresponds to TypeScript file: src/server/auth/handlers/token.ts
 import base64
 import hashlib
 import json
-from typing import Annotated, Any, Callable, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Callable, Literal, Union
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -44,7 +44,7 @@ class RefreshTokenRequest(ClientAuthRequest):
     """
     grant_type: Literal["refresh_token"]
     refresh_token: str = Field(..., description="The refresh token")
-    scope: Optional[str] = Field(None, description="Optional scope parameter")
+    scope: str | None = Field(None, description="Optional scope parameter")
 
 
 class TokenRequest(RootModel):

@@ -4,7 +4,7 @@ OAuth server provider interfaces for MCP authorization.
 Corresponds to TypeScript file: src/server/auth/provider.ts
 """
 
-from typing import Any, Dict, List, Optional, Protocol
+from typing import Any, Protocol
 from pydantic import AnyHttpUrl, BaseModel
 from starlette.responses import Response
 
@@ -18,8 +18,8 @@ class AuthorizationParams(BaseModel):
     
     Corresponds to AuthorizationParams in src/server/auth/provider.ts
     """
-    state: Optional[str] = None
-    scopes: Optional[List[str]] = None
+    state: str | None = None
+    scopes: list[str] | None = None
     code_challenge: str
     redirect_uri: AnyHttpUrl
 
@@ -31,7 +31,7 @@ class OAuthRegisteredClientsStore(Protocol):
     Corresponds to OAuthRegisteredClientsStore in src/server/auth/clients.ts
     """
     
-    async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
+    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """
         Retrieves client information by client ID.
         
@@ -45,7 +45,7 @@ class OAuthRegisteredClientsStore(Protocol):
     
     async def register_client(self, 
                              client_info: OAuthClientInformationFull
-                             ) -> Optional[OAuthClientInformationFull]:
+                             ) -> OAuthClientInformationFull | None:
         """
         Registers a new client and returns client information.
         
@@ -121,7 +121,7 @@ class OAuthServerProvider(Protocol):
     async def exchange_refresh_token(self, 
                                    client: OAuthClientInformationFull, 
                                    refresh_token: str, 
-                                   scopes: Optional[List[str]] = None) -> OAuthTokens:
+                                   scopes: list[str] | None = None) -> OAuthTokens:
         """
         Exchanges a refresh token for an access token.
         

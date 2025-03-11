@@ -6,7 +6,7 @@ Corresponds to TypeScript file: src/server/auth/router.ts
 
 from dataclasses import dataclass
 import re
-from typing import Dict, List, Optional, Any, Union, Callable
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from starlette.routing import Route, Router
@@ -26,7 +26,7 @@ from mcp.server.auth.handlers.revoke import create_revocation_handler
 @dataclass
 class ClientRegistrationOptions:
     enabled: bool = False
-    client_secret_expiry_seconds: Optional[int] = None
+    client_secret_expiry_seconds: int | None = None
     
 @dataclass
 class RevocationOptions:
@@ -145,10 +145,10 @@ def create_auth_router(
 
 def build_metadata(
         issuer_url: AnyUrl,
-        service_documentation_url: Optional[AnyUrl],
+        service_documentation_url: AnyUrl | None,
         client_registration_options: ClientRegistrationOptions,
         revocation_options: RevocationOptions,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
     issuer_url_str = str(issuer_url).rstrip("/")
     # Create metadata
     metadata = {

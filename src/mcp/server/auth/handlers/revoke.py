@@ -4,7 +4,7 @@ Handler for OAuth 2.0 Token Revocation.
 Corresponds to TypeScript file: src/server/auth/handlers/revoke.ts
 """
 
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable
 
 from starlette.requests import Request
 from starlette.responses import Response

@@ -5,7 +5,7 @@ Corresponds to TypeScript file: src/server/auth/middleware/bearerAuth.ts
 """
 
 import time
-from typing import List, Optional, Callable, Awaitable, cast, Dict, Any
+from typing import Any, Callable, cast
 
 from starlette.requests import HTTPConnection, Request
 from starlette.exceptions import HTTPException

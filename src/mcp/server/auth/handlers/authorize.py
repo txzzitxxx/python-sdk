@@ -43,26 +43,29 @@ class AuthorizationRequest(BaseModel):
     class Config:
         extra = "ignore"
 
-def validate_scope(requested_scope: str | None, client: OAuthClientInformationFull) -> list[str] | None:
+def validate_scope(requested_scope: str | None, scope: str | None) -> list[str] | None:
     if requested_scope is None:
         return None
     requested_scopes = requested_scope.split(" ")
-    allowed_scopes = [] if client.scope is None else client.scope.split(" ")
+    allowed_scopes = [] if scope is None else scope.split(" ")
     for scope in requested_scopes:
         if scope not in allowed_scopes:
             raise InvalidRequestError(f"Client was not registered with scope {scope}")
     return requested_scopes
 
-def validate_redirect_uri(auth_request: AuthorizationRequest, client: OAuthClientInformationFull) -> AnyHttpUrl:
-    if auth_request.redirect_uri is not None:
+def validate_redirect_uri(redirect_uri: AnyHttpUrl | None, redirect_uris: list[AnyHttpUrl]) -> AnyHttpUrl:
+    if not redirect_uris:
+        raise InvalidClientError("Client has no registered redirect URIs")
+
+    if redirect_uri is not None:
         # Validate redirect_uri against client's registered redirect URIs
-        if auth_request.redirect_uri not in client.redirect_uris:
+        if redirect_uri not in redirect_uris:
             raise InvalidRequestError(
-                f"Redirect URI '{auth_request.redirect_uri}' not registered for client"
+                f"Redirect URI '{redirect_uri}' not registered for client"
             )
-        return auth_request.redirect_uri
-    elif len(client.redirect_uris) == 1:
-        return client.redirect_uris[0]
+        return redirect_uri
+    elif len(redirect_uris) == 1:
+        return redirect_uris[0]
     else:
         raise InvalidRequestError("redirect_uri must be specified when client has multiple registered URIs")
 
@@ -104,8 +107,8 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
         
  
         # do validation which is dependent on the client configuration
-        redirect_uri = validate_redirect_uri(auth_request, client)
-        scopes = validate_scope(auth_request.scope, client)
+        redirect_uri = validate_redirect_uri(auth_request.redirect_uri, client.redirect_uris)
+        scopes = validate_scope(auth_request.scope, client.scope)
         
         auth_params = AuthorizationParams(
             state=auth_request.state,

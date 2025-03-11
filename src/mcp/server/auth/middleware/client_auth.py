@@ -5,7 +5,7 @@ Corresponds to TypeScript file: src/server/auth/middleware/clientAuth.ts
 """
 
 import time
-from typing import Optional, Dict, Any, Callable
+from typing import Any, Callable
 
 from starlette.requests import Request
 from starlette.exceptions import HTTPException
@@ -28,7 +28,7 @@ class ClientAuthRequest(BaseModel):
     Corresponds to ClientAuthenticatedRequestSchema in src/server/auth/middleware/clientAuth.ts
     """
     client_id: str
-    client_secret: Optional[str] = None
+    client_secret: str | None = None
 
 
 class ClientAuthenticator:
@@ -94,7 +94,7 @@ class ClientAuthMiddleware:
         self.app = app
         self.client_auth = ClientAuthenticator(clients_store)
         
-    async def __call__(self, scope: Dict, receive: Callable, send: Callable) -> None:
+    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
         """
         Process the request and authenticate the client.
         
@@ -112,7 +112,7 @@ class ClientAuthMiddleware:
         
         # Add client authentication to the request
         try:
-            client = await self.client_auth(request)
+            client = await self.client_auth(ClientAuthRequest.model_validate(request))
             # Store the client in the request state
             request.state.client = client
         except HTTPException:
