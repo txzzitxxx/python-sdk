@@ -49,14 +49,18 @@ class TokenRequest(RootModel):
         Field(discriminator="grant_type"),
     ]
 
-AUTH_CODE_TTL = 300 # seconds
 
 def create_token_handler(
     provider: OAuthServerProvider, client_authenticator: ClientAuthenticator
 ) -> Callable:
     def response(obj: TokenSuccessResponse | TokenErrorResponse):
+        status_code = 200
+        if isinstance(obj, TokenErrorResponse):
+            status_code = 400
+            
         return PydanticJSONResponse(
             content=obj,
+            status_code=status_code,
             headers={
                 "Cache-Control": "no-store",
                 "Pragma": "no-cache",
@@ -98,8 +102,7 @@ def create_token_handler(
 
                 # make auth codes expire after a deadline
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.5
-                expires_at = auth_code.issued_at + AUTH_CODE_TTL
-                if expires_at < time.time():
+                if auth_code.expires_at < time.time():
                     return response(TokenErrorResponse(
                         error="invalid_grant",
                         error_description=f"authorization code has expired"
@@ -130,12 +133,34 @@ def create_token_handler(
                 )
 
             case RefreshTokenRequest():
+                refresh_token = await provider.load_refresh_token(client_info, token_request.refresh_token)
+                if refresh_token is None or refresh_token.client_id != token_request.client_id:
+                    # if the authoriation code belongs to a different client, pretend it doesn't exist
+                    return response(TokenErrorResponse(
+                        error="invalid_grant",
+                        error_description=f"refresh token does not exist"
+                    ))
+
+                if refresh_token.expires_at and refresh_token.expires_at < time.time():
+                    # if the authoriation code belongs to a different client, pretend it doesn't exist
+                    return response(TokenErrorResponse(
+                        error="invalid_grant",
+                        error_description=f"refresh token has expired"
+                    ))
+
                 # Parse scopes if provided
-                scopes = token_request.scope.split(" ") if token_request.scope else None
+                scopes = token_request.scope.split(" ") if token_request.scope else refresh_token.scopes
+
+                for scope in scopes:
+                    if scope not in refresh_token.scopes:
+                        return response(TokenErrorResponse(
+                            error="invalid_scope",
+                            error_description=f"cannot request scope `{scope}` not provided by refresh token"
+                        ))
 
                 # Exchange refresh token for new tokens
                 tokens = await provider.exchange_refresh_token(
-                    client_info, token_request.refresh_token, scopes
+                    client_info, refresh_token, scopes
                 )
 
         return response(tokens)

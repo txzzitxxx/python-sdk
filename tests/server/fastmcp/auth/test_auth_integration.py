@@ -7,6 +7,7 @@ import hashlib
 import json
 import secrets
 import time
+import unittest.mock
 from typing import List, Optional
 from urllib.parse import parse_qs, urlparse
 
@@ -24,6 +25,7 @@ from mcp.server.auth.provider import (
     OAuthRegisteredClientsStore,
     OAuthServerProvider,
     OAuthTokenRevocationRequest,
+    RefreshToken,
     construct_redirect_uri,
 )
 from mcp.server.auth.router import (
@@ -36,6 +38,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import (
     OAuthClientInformationFull,
     TokenSuccessResponse,
+    TokenErrorResponse,
 )
 from mcp.types import JSONRPCRequest
 
@@ -79,7 +82,7 @@ class MockOAuthProvider(OAuthServerProvider):
             client_id= client.client_id,
             code_challenge= params.code_challenge,
             redirect_uri= params.redirect_uri,
-            issued_at= time.time(),
+            expires_at=time.time() + 300,
             scopes=params.scopes or ["read", "write"]
         )
         self.auth_codes[code.code] = code
@@ -102,11 +105,12 @@ class MockOAuthProvider(OAuthServerProvider):
         refresh_token = f"refresh_{secrets.token_hex(32)}"
 
         # Store the tokens
-        self.tokens[access_token] = {
-            "client_id": client.client_id,
-            "scopes": authorization_code.scopes,
-            "expires_at": int(time.time()) + 3600,
-        }
+        self.tokens[access_token] = AuthInfo(
+            token=access_token,
+            client_id= client.client_id,
+            scopes= authorization_code.scopes,
+            expires_at=int(time.time()) + 3600,
+        )
 
         self.refresh_tokens[refresh_token] = access_token
 
@@ -121,18 +125,35 @@ class MockOAuthProvider(OAuthServerProvider):
             refresh_token=refresh_token,
         )
 
+    async def load_refresh_token(self, client: OAuthClientInformationFull, refresh_token: str) -> RefreshToken | None:
+        old_access_token = self.refresh_tokens.get(refresh_token)
+        if old_access_token is None:
+            return None
+        token_info = self.tokens.get(old_access_token)
+        if token_info is None:
+            return None
+        
+        # Create a RefreshToken object that matches what is expected in later code
+        refresh_obj = RefreshToken(
+            token=refresh_token,
+            client_id=token_info.client_id,
+            scopes=token_info.scopes,
+            expires_at=token_info.expires_at,
+        )
+        
+        return refresh_obj
+
     async def exchange_refresh_token(
         self,
         client: OAuthClientInformationFull,
-        refresh_token: str,
-        scopes: Optional[List[str]] = None,
+        refresh_token: RefreshToken,
+        scopes: List[str],
     ) -> TokenSuccessResponse:
         # Check if refresh token exists
-        if refresh_token not in self.refresh_tokens:
+        if refresh_token.token not in self.refresh_tokens:
             raise InvalidTokenError("Invalid refresh token")
 
-        # Get the access token for this refresh token
-        old_access_token = self.refresh_tokens[refresh_token]
+        old_access_token = self.refresh_tokens[refresh_token.token]
 
         # Check if the access token exists
         if old_access_token not in self.tokens:
@@ -140,7 +161,7 @@ class MockOAuthProvider(OAuthServerProvider):
 
         # Check if the token was issued to this client
         token_info = self.tokens[old_access_token]
-        if token_info["client_id"] != client.client_id:
+        if token_info.client_id != client.client_id:
             raise InvalidTokenError("Refresh token was not issued to this client")
 
         # Generate a new access token and refresh token
@@ -150,21 +171,21 @@ class MockOAuthProvider(OAuthServerProvider):
         # Store the new tokens
         self.tokens[new_access_token] = {
             "client_id": client.client_id,
-            "scopes": scopes or token_info["scopes"],
+            "scopes": scopes or token_info.scopes,
             "expires_at": int(time.time()) + 3600,
         }
 
         self.refresh_tokens[new_refresh_token] = new_access_token
 
         # Remove the old tokens
-        del self.refresh_tokens[refresh_token]
+        del self.refresh_tokens[refresh_token.token]
         del self.tokens[old_access_token]
 
         return TokenSuccessResponse(
             access_token=new_access_token,
             token_type="bearer",
             expires_in=3600,
-            scope=" ".join(scopes) if scopes else " ".join(token_info["scopes"]),
+            scope=" ".join(scopes) if scopes else " ".join(token_info.scopes),
             refresh_token=new_refresh_token,
         )
 
@@ -177,14 +198,14 @@ class MockOAuthProvider(OAuthServerProvider):
         token_info = self.tokens[token]
 
         # Check if token is expired
-        if token_info["expires_at"] < int(time.time()):
+        if token_info.expires_at < int(time.time()):
             raise InvalidTokenError("Access token has expired")
 
         return AuthInfo(
             token=token,
-            client_id=token_info["client_id"],
-            scopes=token_info["scopes"],
-            expires_at=token_info["expires_at"],
+            client_id=token_info.client_id,
+            scopes=token_info.scopes,
+            expires_at=token_info.expires_at,
         )
 
     async def revoke_token(
@@ -250,6 +271,119 @@ def test_client(auth_app) -> httpx.AsyncClient:
     )
 
 
+@pytest.fixture
+async def registered_client(test_client: httpx.AsyncClient, request):
+    """Create and register a test client.
+    
+    Parameters can be customized via indirect parameterization:
+    @pytest.mark.parametrize("registered_client", 
+                            [{"grant_types": ["authorization_code"]}], 
+                            indirect=True)
+    """
+    # Default client metadata
+    client_metadata = {
+        "redirect_uris": ["https://client.example.com/callback"],
+        "client_name": "Test Client",
+        "grant_types": ["authorization_code", "refresh_token"],
+    }
+    
+    # Override with any parameters from the test
+    if hasattr(request, "param") and request.param:
+        client_metadata.update(request.param)
+    
+    response = await test_client.post("/register", json=client_metadata)
+    assert response.status_code == 201, f"Failed to register client: {response.content}"
+    
+    client_info = response.json()
+    return client_info
+
+
+@pytest.fixture
+def pkce_challenge():
+    """Create a PKCE challenge with code_verifier and code_challenge."""
+    code_verifier = "some_random_verifier_string"
+    code_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+        .decode()
+        .rstrip("=")
+    )
+    
+    return {"code_verifier": code_verifier, "code_challenge": code_challenge}
+
+
+@pytest.fixture
+async def auth_code(test_client, registered_client, pkce_challenge, request):
+    """Get an authorization code.
+    
+    Parameters can be customized via indirect parameterization:
+    @pytest.mark.parametrize("auth_code", 
+                            [{"redirect_uri": "https://client.example.com/other-callback"}], 
+                            indirect=True)
+    """
+    # Default authorize params
+    auth_params = {
+        "response_type": "code",
+        "client_id": registered_client["client_id"],
+        "redirect_uri": "https://client.example.com/callback",
+        "code_challenge": pkce_challenge["code_challenge"],
+        "code_challenge_method": "S256",
+        "state": "test_state",
+    }
+    
+    # Override with any parameters from the test
+    if hasattr(request, "param") and request.param:
+        auth_params.update(request.param)
+    
+    response = await test_client.get("/authorize", params=auth_params)
+    assert response.status_code == 302, f"Failed to get auth code: {response.content}"
+    
+    # Extract the authorization code
+    redirect_url = response.headers["location"]
+    parsed_url = urlparse(redirect_url)
+    query_params = parse_qs(parsed_url.query)
+    
+    assert "code" in query_params, f"No code in response: {query_params}"
+    auth_code = query_params["code"][0]
+    
+    return {
+        "code": auth_code,
+        "redirect_uri": auth_params["redirect_uri"],
+        "state": query_params.get("state", [None])[0],
+    }
+
+
+@pytest.fixture
+async def tokens(test_client, registered_client, auth_code, pkce_challenge, request):
+    """Exchange authorization code for tokens.
+    
+    Parameters can be customized via indirect parameterization:
+    @pytest.mark.parametrize("tokens", 
+                            [{"code_verifier": "wrong_verifier"}], 
+                            indirect=True)
+    """
+    # Default token request params
+    token_params = {
+        "grant_type": "authorization_code",
+        "client_id": registered_client["client_id"],
+        "client_secret": registered_client["client_secret"],
+        "code": auth_code["code"],
+        "code_verifier": pkce_challenge["code_verifier"],
+        "redirect_uri": auth_code["redirect_uri"],
+    }
+    
+    # Override with any parameters from the test
+    if hasattr(request, "param") and request.param:
+        token_params.update(request.param)
+    
+    response = await test_client.post("/token", data=token_params)
+    
+    # Don't assert success here since some tests will intentionally cause errors
+    return {
+        "response": response,
+        "params": token_params,
+    }
+
+
 class TestAuthEndpoints:
     @pytest.mark.anyio
     async def test_metadata_endpoint(self, test_client: httpx.AsyncClient):
@@ -279,6 +413,245 @@ class TestAuthEndpoints:
             "refresh_token",
         ]
         assert metadata["service_documentation"] == "https://docs.example.com"
+        
+    @pytest.mark.anyio
+    async def test_token_validation_error(self, test_client: httpx.AsyncClient):
+        """Test token endpoint error - validation error."""
+        # Missing required fields
+        response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                # Missing code, code_verifier, client_id, etc.
+            },
+        )
+        error_response = response.json()
+        assert error_response["error"] == "invalid_request"
+        assert "error_description" in error_response  # Contains validation error messages
+    
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("registered_client", [{"grant_types": ["authorization_code"]}], indirect=True)  
+    async def test_token_unsupported_grant_type(self, test_client, registered_client):
+        """Test token endpoint error - unsupported grant type."""
+        # Try to use refresh_token grant type with a client that only supports authorization_code
+        response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "refresh_token": "some_refresh_token",
+            },
+        )
+        assert response.status_code == 400
+        error_response = response.json()
+        assert error_response["error"] == "unsupported_grant_type"
+        assert "supported grant types" in error_response["error_description"]
+        
+    @pytest.mark.anyio
+    async def test_token_invalid_auth_code(self, test_client, registered_client, pkce_challenge):
+        """Test token endpoint error - authorization code does not exist."""
+        # Try to use a non-existent authorization code
+        response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "code": "non_existent_auth_code",
+                "code_verifier": pkce_challenge["code_verifier"],
+                "redirect_uri": "https://client.example.com/callback",
+            },
+        )
+        print(f"Status code: {response.status_code}")
+        print(f"Response body: {response.content}")
+        print(f"Response JSON: {response.json()}")
+        assert response.status_code == 400
+        error_response = response.json()
+        assert error_response["error"] == "invalid_grant"
+        assert "authorization code does not exist" in error_response["error_description"]
+        
+    @pytest.mark.anyio
+    async def test_token_expired_auth_code(
+        self, test_client, registered_client, auth_code, pkce_challenge, mock_oauth_provider
+    ):
+        """Test token endpoint error - authorization code has expired."""
+        # Get the current time for our time mocking
+        current_time = time.time()
+        
+        # Find the auth code object 
+        code_value = auth_code["code"]
+        found_code = None
+        for code_obj in mock_oauth_provider.auth_codes.values():
+            if code_obj.code == code_value:
+                found_code = code_obj
+                break
+        
+        assert found_code is not None
+        
+        # Authorization codes are typically short-lived (5 minutes = 300 seconds)
+        # So we'll mock time to be 10 minutes (600 seconds) in the future
+        with unittest.mock.patch('time.time', return_value=current_time + 600):
+            # Try to use the expired authorization code
+            response = await test_client.post(
+                "/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": registered_client["client_id"],
+                    "client_secret": registered_client["client_secret"],
+                    "code": code_value,
+                    "code_verifier": pkce_challenge["code_verifier"],
+                    "redirect_uri": auth_code["redirect_uri"],
+                },
+            )
+            assert response.status_code == 400
+            error_response = response.json()
+            assert error_response["error"] == "invalid_grant"
+            assert "authorization code has expired" in error_response["error_description"]
+        
+    @pytest.mark.anyio
+    @pytest.mark.parametrize("registered_client", 
+                           [{"redirect_uris": ["https://client.example.com/callback", 
+                                               "https://client.example.com/other-callback"]}], 
+                           indirect=True)
+    async def test_token_redirect_uri_mismatch(self, test_client, registered_client, auth_code, pkce_challenge):
+        """Test token endpoint error - redirect URI mismatch."""
+        # Try to use the code with a different redirect URI
+        response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "code": auth_code["code"],
+                "code_verifier": pkce_challenge["code_verifier"],
+                "redirect_uri": "https://client.example.com/other-callback",  # Different from the one used in /authorize
+            },
+        )
+        assert response.status_code == 400
+        error_response = response.json()
+        assert error_response["error"] == "invalid_request"
+        assert "redirect_uri did not match" in error_response["error_description"]
+        
+    @pytest.mark.anyio
+    async def test_token_code_verifier_mismatch(self, test_client, registered_client, auth_code):
+        """Test token endpoint error - PKCE code verifier mismatch."""
+        # Try to use the code with an incorrect code verifier
+        response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "code": auth_code["code"],
+                "code_verifier": "incorrect_code_verifier",  # Different from the one used to create challenge
+                "redirect_uri": auth_code["redirect_uri"],
+            },
+        )
+        assert response.status_code == 400
+        error_response = response.json()
+        assert error_response["error"] == "invalid_grant"
+        assert "incorrect code_verifier" in error_response["error_description"]
+        
+    @pytest.mark.anyio
+    async def test_token_invalid_refresh_token(self, test_client, registered_client):
+        """Test token endpoint error - refresh token does not exist."""
+        # Try to use a non-existent refresh token
+        response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "refresh_token": "non_existent_refresh_token",
+            },
+        )
+        assert response.status_code == 400
+        error_response = response.json()
+        assert error_response["error"] == "invalid_grant"
+        assert "refresh token does not exist" in error_response["error_description"]
+        
+    @pytest.mark.anyio
+    async def test_token_expired_refresh_token(
+        self, test_client, registered_client, auth_code, pkce_challenge, mock_oauth_provider
+    ):
+        """Test token endpoint error - refresh token has expired."""
+        # Step 1: First, let's create a token and refresh token at the current time
+        current_time = time.time()
+        
+        # Exchange authorization code for tokens normally
+        token_response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "code": auth_code["code"],
+                "code_verifier": pkce_challenge["code_verifier"],
+                "redirect_uri": auth_code["redirect_uri"],
+            },
+        )
+        assert token_response.status_code == 200
+        tokens = token_response.json()
+        refresh_token = tokens["refresh_token"]
+        
+        # Step 2: Now let's time travel forward 4 hours (tokens expire in 1 hour by default)
+        # Mock the time.time() function to return a value 4 hours in the future
+        with unittest.mock.patch('time.time', return_value=current_time + 14400):  # 4 hours = 14400 seconds
+            # Try to use the refresh token which should now be considered expired
+            response = await test_client.post(
+                "/token",
+                data={
+                    "grant_type": "refresh_token",
+                    "client_id": registered_client["client_id"],
+                    "client_secret": registered_client["client_secret"],
+                    "refresh_token": refresh_token,
+                },
+            )
+            
+            # In the "future", the token should be considered expired
+            assert response.status_code == 400
+            error_response = response.json()
+            assert error_response["error"] == "invalid_grant"
+            assert "refresh token has expired" in error_response["error_description"]
+        
+    @pytest.mark.anyio
+    async def test_token_invalid_scope(
+        self, test_client, registered_client, auth_code, pkce_challenge
+    ):
+        """Test token endpoint error - invalid scope in refresh token request."""
+        # Exchange authorization code for tokens
+        token_response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "authorization_code",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "code": auth_code["code"],
+                "code_verifier": pkce_challenge["code_verifier"],
+                "redirect_uri": auth_code["redirect_uri"],
+            },
+        )
+        assert token_response.status_code == 200
+        
+        tokens = token_response.json()
+        refresh_token = tokens["refresh_token"]
+        
+        # Try to use refresh token with an invalid scope
+        response = await test_client.post(
+            "/token",
+            data={
+                "grant_type": "refresh_token",
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "refresh_token": refresh_token,
+                "scope": "read write invalid_scope",  # Adding an invalid scope
+            },
+        )
+        assert response.status_code == 400
+        error_response = response.json()
+        assert error_response["error"] == "invalid_scope"
+        assert "cannot request scope" in error_response["error_description"]
 
     @pytest.mark.anyio
     async def test_client_registration(
@@ -358,7 +731,7 @@ class TestAuthEndpoints:
         assert query_params["state"][0] == "test_form_state"
 
     @pytest.mark.anyio
-    async def test_authorization_flow(
+    async def test_authorization_get(
         self, test_client: httpx.AsyncClient, mock_oauth_provider: MockOAuthProvider
     ):
         """Test the full authorization flow."""
