@@ -14,7 +14,6 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from mcp.server.auth.errors import (
-    InvalidRequestError,
     OAuthError,
     ServerError,
     stringify_pydantic_error,
@@ -23,8 +22,14 @@ from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.provider import OAuthRegisteredClientsStore
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
 
+
 class ErrorResponse(BaseModel):
-    error: Literal["invalid_redirect_uri", "invalid_client_metadata", "invalid_software_statement", "unapproved_software_statement"]
+    error: Literal[
+        "invalid_redirect_uri",
+        "invalid_client_metadata",
+        "invalid_software_statement",
+        "unapproved_software_statement",
+    ]
     error_description: str
 
 
@@ -60,10 +65,13 @@ def create_registration_handler(
                 body = await request.json()
                 client_metadata = OAuthClientMetadata.model_validate(body)
             except ValidationError as validation_error:
-                return PydanticJSONResponse(content=ErrorResponse(
-                    error="invalid_client_metadata",
-                    error_description=stringify_pydantic_error(validation_error)
-                ), status_code=400)
+                return PydanticJSONResponse(
+                    content=ErrorResponse(
+                        error="invalid_client_metadata",
+                        error_description=stringify_pydantic_error(validation_error),
+                    ),
+                    status_code=400,
+                )
 
             client_id = str(uuid4())
             client_secret = None

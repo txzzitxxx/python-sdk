@@ -11,15 +11,14 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from mcp.server.auth.errors import (
-    InvalidRequestError,
     stringify_pydantic_error,
 )
+from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.middleware.client_auth import (
     ClientAuthenticator,
     ClientAuthRequest,
 )
 from mcp.server.auth.provider import OAuthServerProvider
-from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.shared.auth import OAuthTokenRevocationRequest, TokenErrorResponse
 
 
@@ -51,17 +50,25 @@ def create_revocation_handler(
             form_data = await request.form()
             revocation_request = RevocationRequest.model_validate(dict(form_data))
         except ValidationError as e:
-            return PydanticJSONResponse(status_code=400, content=TokenErrorResponse(
-                error="invalid_request",
-                error_description=stringify_pydantic_error(e)
-            ))
+            return PydanticJSONResponse(
+                status_code=400,
+                content=TokenErrorResponse(
+                    error="invalid_request",
+                    error_description=stringify_pydantic_error(e),
+                ),
+            )
 
         # Authenticate client
         client_auth_result = await client_authenticator(revocation_request)
 
         # Revoke token
         if provider.revoke_token:
-            await provider.revoke_token(client_auth_result, revocation_request)
+            # Convert RevocationRequest to OAuthTokenRevocationRequest
+            oauth_revocation_request = OAuthTokenRevocationRequest(
+                token=revocation_request.token,
+                token_type_hint=revocation_request.token_type_hint,
+            )
+            await provider.revoke_token(client_auth_result, oauth_revocation_request)
 
         # Return successful empty response
         return Response(

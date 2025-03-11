@@ -6,7 +6,6 @@ handle streaming responses like SSE where the app doesn't terminate until
 the connection is closed.
 """
 
-import asyncio
 import typing
 from typing import Any, Dict, Tuple
 

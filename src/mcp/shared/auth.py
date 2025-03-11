@@ -14,7 +14,14 @@ class TokenErrorResponse(BaseModel):
     See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
     """
 
-    error: Literal["invalid_request", "invalid_client", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope"]
+    error: Literal[
+        "invalid_request",
+        "invalid_client",
+        "invalid_grant",
+        "unauthorized_client",
+        "unsupported_grant_type",
+        "invalid_scope",
+    ]
     error_description: Optional[str] = None
     error_uri: Optional[AnyHttpUrl] = None
 
@@ -105,7 +112,7 @@ class OAuthClientRegistrationError(BaseModel):
 class OAuthTokenRevocationRequest(BaseModel):
     """
     RFC 7009 OAuth 2.0 Token Revocation request.
-    
+
     Corresponds to OAuthTokenRevocationRequestSchema in src/shared/auth.ts
     """
 

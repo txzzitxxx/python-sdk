@@ -5,7 +5,7 @@ Corresponds to TypeScript file: src/server/auth/middleware/clientAuth.ts
 """
 
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict
 
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException

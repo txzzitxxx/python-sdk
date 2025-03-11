@@ -4,7 +4,7 @@ Handler for OAuth 2.0 Authorization Server Metadata.
 Corresponds to TypeScript file: src/server/auth/handlers/metadata.ts
 """
 
-from typing import Any, Callable, Dict
+from typing import Callable
 
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -35,8 +35,9 @@ def create_metadata_handler(metadata: OAuthMetadata) -> Callable:
         Returns:
             JSON response with the authorization server metadata
         """
-        # Remove any None values from metadata
-        clean_metadata = {k: v for k, v in metadata.items() if v is not None}
+        # Convert metadata to dict and remove any None values
+        metadata_dict = metadata.model_dump()
+        clean_metadata = {k: v for k, v in metadata_dict.items() if v is not None}
 
         return JSONResponse(
             content=clean_metadata,

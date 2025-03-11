@@ -5,7 +5,7 @@ Corresponds to TypeScript file: src/server/auth/router.ts
 """
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from pydantic import AnyUrl
 from starlette.routing import Route, Router
