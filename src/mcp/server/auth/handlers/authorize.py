@@ -244,14 +244,14 @@ class AuthorizationHandler:
             )
 
             # Let the provider pick the next URI to redirect to
-            response = RedirectResponse(
-                url="", status_code=302, headers={"Cache-Control": "no-store"}
+            return RedirectResponse(
+                url=await self.provider.authorize(
+                    client,
+                    auth_params,
+                ),
+                status_code=302,
+                headers={"Cache-Control": "no-store"}
             )
-            response.headers["location"] = await self.provider.authorize(
-                client,
-                auth_params,
-            )
-            return response
 
         except Exception as validation_error:
             # Catch-all for unexpected errors
