@@ -8,7 +8,7 @@ import json
 import secrets
 import time
 import unittest.mock
-from typing import List, Optional
+from typing import List, Literal, Optional
 from urllib.parse import parse_qs, urlparse
 
 import anyio
@@ -24,7 +24,6 @@ from mcp.server.auth.provider import (
     AuthorizationParams,
     OAuthRegisteredClientsStore,
     OAuthServerProvider,
-    OAuthTokenRevocationRequest,
     RefreshToken,
     construct_redirect_uri,
 )
@@ -37,7 +36,7 @@ from mcp.server.auth.types import AuthInfo
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import (
     OAuthClientInformationFull,
-    TokenSuccessResponse,
+    OAuthToken,
 )
 from mcp.types import JSONRPCRequest
 
@@ -94,7 +93,7 @@ class MockOAuthProvider(OAuthServerProvider):
 
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
-    ) -> TokenSuccessResponse:
+    ) -> OAuthToken:
         assert authorization_code.code in self.auth_codes
 
         # Generate an access token and refresh token
@@ -114,7 +113,7 @@ class MockOAuthProvider(OAuthServerProvider):
         # Remove the used code
         del self.auth_codes[authorization_code.code]
 
-        return TokenSuccessResponse(
+        return OAuthToken(
             access_token=access_token,
             token_type="bearer",
             expires_in=3600,
@@ -147,7 +146,7 @@ class MockOAuthProvider(OAuthServerProvider):
         client: OAuthClientInformationFull,
         refresh_token: RefreshToken,
         scopes: List[str],
-    ) -> TokenSuccessResponse:
+    ) -> OAuthToken:
         # Check if refresh token exists
         assert refresh_token.token in self.refresh_tokens
 
@@ -177,7 +176,7 @@ class MockOAuthProvider(OAuthServerProvider):
         del self.refresh_tokens[refresh_token.token]
         del self.tokens[old_access_token]
 
-        return TokenSuccessResponse(
+        return OAuthToken(
             access_token=new_access_token,
             token_type="bearer",
             expires_in=3600,
@@ -200,30 +199,17 @@ class MockOAuthProvider(OAuthServerProvider):
         )
 
     async def revoke_token(
-        self, client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest
+        self,
+        token: str,
+        token_type_hint: Literal["access_token", "refresh_token"] | None = None,
     ) -> None:
-        token = request.token
-
         # Check if it's a refresh token
         if token in self.refresh_tokens:
-            access_token = self.refresh_tokens[token]
-
-            # Check if this refresh token belongs to this client
-            if self.tokens[access_token]["client_id"] != client.client_id:
-                # For security reasons, we still return success
-                return
-
-            # Remove the refresh token and its associated access token
-            del self.tokens[access_token]
+            # Remove the refresh token
             del self.refresh_tokens[token]
 
         # Check if it's an access token
         elif token in self.tokens:
-            # Check if this access token belongs to this client
-            if self.tokens[token]["client_id"] != client.client_id:
-                # For security reasons, we still return success
-                return
-
             # Remove the access token
             del self.tokens[token]
 

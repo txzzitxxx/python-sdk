@@ -10,7 +10,7 @@ import time
 from dataclasses import dataclass
 from typing import Annotated, Literal
 
-from pydantic import AnyHttpUrl, Field, RootModel, ValidationError
+from pydantic import AnyHttpUrl, BaseModel, Field, RootModel, ValidationError
 from starlette.requests import Request
 
 from mcp.server.auth.errors import (
@@ -24,7 +24,7 @@ from mcp.server.auth.middleware.client_auth import (
     ClientAuthRequest,
 )
 from mcp.server.auth.provider import OAuthServerProvider
-from mcp.shared.auth import TokenErrorResponse, TokenSuccessResponse
+from mcp.shared.auth import OAuthToken
 
 
 class AuthorizationCodeRequest(ClientAuthRequest):
@@ -51,6 +51,30 @@ class TokenRequest(RootModel):
         AuthorizationCodeRequest | RefreshTokenRequest,
         Field(discriminator="grant_type"),
     ]
+
+
+class TokenErrorResponse(BaseModel):
+    """
+    See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
+    """
+
+    error: Literal[
+        "invalid_request",
+        "invalid_client",
+        "invalid_grant",
+        "unauthorized_client",
+        "unsupported_grant_type",
+        "invalid_scope",
+    ]
+    error_description: str | None = None
+    error_uri: AnyHttpUrl | None = None
+
+
+class TokenSuccessResponse(RootModel):
+    # this is just a wrapper over OAuthToken; the only reason we do this
+    # is to have some separation between the HTTP response type, and the
+    # type returned by the provider
+    root: OAuthToken
 
 
 @dataclass
@@ -100,7 +124,7 @@ class TokenHandler:
                 )
             )
 
-        tokens: TokenSuccessResponse
+        tokens: OAuthToken
 
         match token_request:
             case AuthorizationCodeRequest():
@@ -208,4 +232,4 @@ class TokenHandler:
                     client_info, refresh_token, scopes
                 )
 
-        return self.response(tokens)
+        return self.response(TokenSuccessResponse(root=tokens))

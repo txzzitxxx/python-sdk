@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, RootModel, ValidationError
 from starlette.requests import Request
 from starlette.responses import Response
 
@@ -20,7 +20,13 @@ from mcp.server.auth.provider import OAuthRegisteredClientsStore
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
 
 
-class ErrorResponse(BaseModel):
+class RegistrationRequest(RootModel):
+    # this wrapper is a no-op; it's just to separate out the types exposed to the
+    # provider from what we use in the HTTP handler
+    root: OAuthClientMetadata
+
+
+class RegistrationErrorResponse(BaseModel):
     error: Literal[
         "invalid_redirect_uri",
         "invalid_client_metadata",
@@ -43,7 +49,7 @@ class RegistrationHandler:
             client_metadata = OAuthClientMetadata.model_validate(body)
         except ValidationError as validation_error:
             return PydanticJSONResponse(
-                content=ErrorResponse(
+                content=RegistrationErrorResponse(
                     error="invalid_client_metadata",
                     error_description=stringify_pydantic_error(validation_error),
                 ),

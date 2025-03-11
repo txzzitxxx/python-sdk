@@ -12,7 +12,7 @@ from pydantic import AnyHttpUrl, BaseModel
 from mcp.server.auth.types import AuthInfo
 from mcp.shared.auth import (
     OAuthClientInformationFull,
-    TokenSuccessResponse,
+    OAuthToken,
 )
 
 
@@ -43,15 +43,6 @@ class RefreshToken(BaseModel):
     client_id: str
     scopes: list[str]
     expires_at: int | None = None
-
-
-class OAuthTokenRevocationRequest(BaseModel):
-    """
-    # See https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
-    """
-
-    token: str
-    token_type_hint: Literal["access_token", "refresh_token"] | None = None
 
 
 class OAuthRegisteredClientsStore(Protocol):
@@ -149,7 +140,7 @@ class OAuthServerProvider(Protocol):
 
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
-    ) -> TokenSuccessResponse:
+    ) -> OAuthToken:
         """
         Exchanges an authorization code for an access token.
 
@@ -171,7 +162,7 @@ class OAuthServerProvider(Protocol):
         client: OAuthClientInformationFull,
         refresh_token: RefreshToken,
         scopes: list[str],
-    ) -> TokenSuccessResponse:
+    ) -> OAuthToken:
         """
         Exchanges a refresh token for an access token.
 
@@ -198,7 +189,9 @@ class OAuthServerProvider(Protocol):
         ...
 
     async def revoke_token(
-        self, client: OAuthClientInformationFull, request: OAuthTokenRevocationRequest
+        self,
+        token: str,
+        token_type_hint: Literal["access_token", "refresh_token"] | None = None,
     ) -> None:
         """
         Revokes an access or refresh token.
@@ -206,8 +199,10 @@ class OAuthServerProvider(Protocol):
         If the given token is invalid or already revoked, this method should do nothing.
 
         Args:
-            client: The client revoking the token.
-            request: The token revocation request.
+            token: the token to revoke
+            token_type_hint: hint about the type of token to revoke; optional. if the
+            token cannot be located using this hint, the provider MUST extend its search
+            to include all tokens.
         """
         ...
 

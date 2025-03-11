@@ -53,6 +53,25 @@ class AuthorizationRequest(BaseModel):
     )
 
 
+AuthorizationErrorCode = Literal[
+    "invalid_request",
+    "unauthorized_client",
+    "access_denied",
+    "unsupported_response_type",
+    "invalid_scope",
+    "server_error",
+    "temporarily_unavailable",
+]
+
+
+class AuthorizationErrorResponse(BaseModel):
+    error: AuthorizationErrorCode
+    error_description: str
+    error_uri: AnyUrl | None = None
+    # must be set if provided in the request
+    state: str | None = None
+
+
 def validate_scope(
     requested_scope: str | None, client: OAuthClientInformationFull
 ) -> list[str] | None:
@@ -84,25 +103,6 @@ def validate_redirect_uri(
         )
 
 
-ErrorCode = Literal[
-    "invalid_request",
-    "unauthorized_client",
-    "access_denied",
-    "unsupported_response_type",
-    "invalid_scope",
-    "server_error",
-    "temporarily_unavailable",
-]
-
-
-class ErrorResponse(BaseModel):
-    error: ErrorCode
-    error_description: str
-    error_uri: AnyUrl | None = None
-    # must be set if provided in the request
-    state: str | None = None
-
-
 def best_effort_extract_string(
     key: str, params: None | FormData | QueryParams
 ) -> str | None:
@@ -132,7 +132,9 @@ class AuthorizationHandler:
         params = None
 
         async def error_response(
-            error: ErrorCode, error_description: str, attempt_load_client: bool = True
+            error: AuthorizationErrorCode,
+            error_description: str,
+            attempt_load_client: bool = True,
         ):
             nonlocal client, redirect_uri, state
             if client is None and attempt_load_client:
@@ -157,7 +159,7 @@ class AuthorizationHandler:
                 # make last-ditch effort to load state
                 state = best_effort_extract_string("state", params)
 
-            error_resp = ErrorResponse(
+            error_resp = AuthorizationErrorResponse(
                 error=error,
                 error_description=error_description,
                 state=state,
@@ -194,7 +196,7 @@ class AuthorizationHandler:
                 auth_request = AuthorizationRequest.model_validate(params)
                 state = auth_request.state  # Update with validated state
             except ValidationError as validation_error:
-                error: ErrorCode = "invalid_request"
+                error: AuthorizationErrorCode = "invalid_request"
                 for e in validation_error.errors():
                     if e["loc"] == ("response_type",) and e["type"] == "literal_error":
                         error = "unsupported_response_type"
@@ -264,11 +266,11 @@ class AuthorizationHandler:
 
 
 def create_error_redirect(
-    redirect_uri: AnyUrl, error: Exception | ErrorResponse
+    redirect_uri: AnyUrl, error: Exception | AuthorizationErrorResponse
 ) -> str:
     parsed_uri = urlparse(str(redirect_uri))
 
-    if isinstance(error, ErrorResponse):
+    if isinstance(error, AuthorizationErrorResponse):
         # Convert ErrorResponse to dict
         error_dict = error.model_dump(exclude_none=True)
         query_params = {}

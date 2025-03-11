@@ -9,24 +9,7 @@ from typing import Any, List, Literal, Optional
 from pydantic import AnyHttpUrl, BaseModel, Field
 
 
-class TokenErrorResponse(BaseModel):
-    """
-    See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
-    """
-
-    error: Literal[
-        "invalid_request",
-        "invalid_client",
-        "invalid_grant",
-        "unauthorized_client",
-        "unsupported_grant_type",
-        "invalid_scope",
-    ]
-    error_description: Optional[str] = None
-    error_uri: Optional[AnyHttpUrl] = None
-
-
-class TokenSuccessResponse(BaseModel):
+class OAuthToken(BaseModel):
     """
     See https://datatracker.ietf.org/doc/html/rfc6749#section-5.1
     """
