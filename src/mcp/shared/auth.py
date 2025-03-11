@@ -51,33 +51,16 @@ class OAuthClientMetadata(BaseModel):
     software_version: Optional[str] = None
 
 
-class OAuthClientInformation(BaseModel):
+class OAuthClientInformationFull(OAuthClientMetadata):
     """
-    RFC 7591 OAuth 2.0 Dynamic Client Registration client information.
+    RFC 7591 OAuth 2.0 Dynamic Client Registration full response
+    (client information plus metadata).
     """
 
     client_id: str
     client_secret: Optional[str] = None
     client_id_issued_at: Optional[int] = None
     client_secret_expires_at: Optional[int] = None
-
-
-class OAuthClientInformationFull(OAuthClientMetadata, OAuthClientInformation):
-    """
-    RFC 7591 OAuth 2.0 Dynamic Client Registration full response
-    (client information plus metadata).
-    """
-
-    pass
-
-
-class OAuthClientRegistrationError(BaseModel):
-    """
-    RFC 7591 OAuth 2.0 Dynamic Client Registration error response.
-    """
-
-    error: str
-    error_description: Optional[str] = None
 
 
 class OAuthMetadata(BaseModel):

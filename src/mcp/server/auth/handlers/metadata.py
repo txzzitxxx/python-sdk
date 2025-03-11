@@ -1,19 +1,18 @@
 from dataclasses import dataclass
-from typing import Any
 
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import Response
+
+from mcp.server.auth.json_response import PydanticJSONResponse
+from mcp.shared.auth import OAuthMetadata
 
 
 @dataclass
 class MetadataHandler:
-    metadata: dict[str, Any]
+    metadata: OAuthMetadata
 
     async def handle(self, request: Request) -> Response:
-        # Remove any None values from metadata
-        clean_metadata = {k: v for k, v in self.metadata.items() if v is not None}
-
-        return JSONResponse(
-            content=clean_metadata,
+        return PydanticJSONResponse(
+            content=self.metadata,
             headers={"Cache-Control": "public, max-age=3600"},  # Cache for 1 hour
         )

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from typing import Any
 
 from pydantic import AnyUrl
 from starlette.routing import Route, Router
@@ -11,6 +10,7 @@ from mcp.server.auth.handlers.revoke import RevocationHandler
 from mcp.server.auth.handlers.token import TokenHandler
 from mcp.server.auth.middleware.client_auth import ClientAuthenticator
 from mcp.server.auth.provider import OAuthServerProvider
+from mcp.shared.auth import OAuthMetadata
 
 
 @dataclass
@@ -139,29 +139,29 @@ def build_metadata(
     service_documentation_url: AnyUrl | None,
     client_registration_options: ClientRegistrationOptions,
     revocation_options: RevocationOptions,
-) -> dict[str, Any]:
+) -> OAuthMetadata:
     issuer_url_str = str(issuer_url).rstrip("/")
     # Create metadata
-    metadata = {
-        "issuer": issuer_url_str,
-        "service_documentation": str(service_documentation_url).rstrip("/")
+    metadata = OAuthMetadata(
+        issuer=issuer_url_str,
+        service_documentation=str(service_documentation_url).rstrip("/")
         if service_documentation_url
         else None,
-        "authorization_endpoint": f"{issuer_url_str}{AUTHORIZATION_PATH}",
-        "response_types_supported": ["code"],
-        "code_challenge_methods_supported": ["S256"],
-        "token_endpoint": f"{issuer_url_str}{TOKEN_PATH}",
-        "token_endpoint_auth_methods_supported": ["client_secret_post"],
-        "grant_types_supported": ["authorization_code", "refresh_token"],
-    }
+        authorization_endpoint=f"{issuer_url_str}{AUTHORIZATION_PATH}",
+        response_types_supported=["code"],
+        code_challenge_methods_supported=["S256"],
+        token_endpoint=f"{issuer_url_str}{TOKEN_PATH}",
+        token_endpoint_auth_methods_supported=["client_secret_post"],
+        grant_types_supported=["authorization_code", "refresh_token"],
+    )
 
     # Add registration endpoint if supported
     if client_registration_options.enabled:
-        metadata["registration_endpoint"] = f"{issuer_url_str}{REGISTRATION_PATH}"
+        metadata.registration_endpoint = f"{issuer_url_str}{REGISTRATION_PATH}"
 
     # Add revocation endpoint if supported
     if revocation_options.enabled:
-        metadata["revocation_endpoint"] = f"{issuer_url_str}{REVOCATION_PATH}"
-        metadata["revocation_endpoint_auth_methods_supported"] = ["client_secret_post"]
+        metadata.revocation_endpoint = f"{issuer_url_str}{REVOCATION_PATH}"
+        metadata.revocation_endpoint_auth_methods_supported = ["client_secret_post"]
 
     return metadata
