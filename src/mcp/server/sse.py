@@ -34,7 +34,6 @@ See SseServerTransport class documentation for more details.
 import logging
 from contextlib import asynccontextmanager
 from typing import Any
-from typing_extensions import deprecated
 from urllib.parse import quote
 from uuid import UUID, uuid4
 
@@ -45,7 +44,6 @@ from sse_starlette import EventSourceResponse
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
-from sse_starlette import EventSourceResponse
 
 import mcp.types as types
 
@@ -80,7 +78,7 @@ class SseServerTransport:
         self._read_stream_writers = {}
         logger.debug(f"SseServerTransport initialized with endpoint: {endpoint}")
 
-    @deprecated("use connect_sse_v2 instead")
+    # @deprecated("use connect_sse_v2 instead")
     @asynccontextmanager
     async def connect_sse(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] != "http":
@@ -133,8 +131,8 @@ class SseServerTransport:
             logger.debug("Yielding read and write streams")
             # TODO: hold on; shouldn't we be returning the EventSourceResponse?
             # I think this is why the tests hang
-            # TODO: we probably shouldn't return response here, since it's a breaking change
-            # this is just to test
+            # TODO: we probably shouldn't return response here, since it's a breaking
+            #   change, this is just to test
             yield (read_stream, write_stream, response)
 
     async def handle_post_message(

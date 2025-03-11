@@ -1,5 +1,7 @@
 from typing import Any
+
 from starlette.responses import JSONResponse
+
 
 class PydanticJSONResponse(JSONResponse):
     def render(self, content: Any) -> bytes:
