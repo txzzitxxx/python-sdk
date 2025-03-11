@@ -11,6 +11,7 @@ import unittest.mock
 from typing import List, Optional
 from urllib.parse import parse_qs, urlparse
 
+import anyio
 import httpx
 import pytest
 from httpx_sse import aconnect_sse
@@ -993,130 +994,132 @@ class TestFastMCPWithAuth:
         def test_tool(x: int) -> str:
             return f"Result: {x}"
 
-        transport = StreamingASGITransport(app=mcp.starlette_app())  # pyright: ignore
-        test_client = httpx.AsyncClient(
-            transport=transport, base_url="http://mcptest.com"
-        )
-        # test_client = httpx.AsyncClient(app=mcp.starlette_app(), base_url="http://mcptest.com")
+        async with anyio.create_task_group() as task_group:
+            transport = StreamingASGITransport(app=mcp.starlette_app(), task_group=task_group)  # pyright: ignore
+            test_client = httpx.AsyncClient(
+                transport=transport, base_url="http://mcptest.com"
+            )
+            # test_client = httpx.AsyncClient(app=mcp.starlette_app(), base_url="http://mcptest.com")
 
-        # Test metadata endpoint
-        response = await test_client.get("/.well-known/oauth-authorization-server")
-        assert response.status_code == 200
+            # Test metadata endpoint
+            response = await test_client.get("/.well-known/oauth-authorization-server")
+            assert response.status_code == 200
 
-        # Test that auth is required for protected endpoints
-        response = await test_client.get("/sse")
-        # TODO: we should return 401/403 depending on whether authn or authz fails
-        assert response.status_code == 403
+            # Test that auth is required for protected endpoints
+            response = await test_client.get("/sse")
+            # TODO: we should return 401/403 depending on whether authn or authz fails
+            assert response.status_code == 403
 
-        response = await test_client.post("/messages/")
-        # TODO: we should return 401/403 depending on whether authn or authz fails
-        assert response.status_code == 403, response.content
+            response = await test_client.post("/messages/")
+            # TODO: we should return 401/403 depending on whether authn or authz fails
+            assert response.status_code == 403, response.content
 
-        response = await test_client.post(
-            "/messages/",
-            headers={"Authorization": "invalid"},
-        )
-        assert response.status_code == 403
-
-        response = await test_client.post(
-            "/messages/",
-            headers={"Authorization": "Bearer invalid"},
-        )
-        assert response.status_code == 403
-
-        # now, become authenticated and try to go through the flow again
-        client_metadata = {
-            "redirect_uris": ["https://client.example.com/callback"],
-            "client_name": "Test Client",
-        }
-
-        response = await test_client.post(
-            "/register",
-            json=client_metadata,
-        )
-        assert response.status_code == 201
-        client_info = response.json()
-
-        # Request authorization using POST with form-encoded data
-        response = await test_client.post(
-            "/authorize",
-            data={
-                "response_type": "code",
-                "client_id": client_info["client_id"],
-                "redirect_uri": "https://client.example.com/callback",
-                "code_challenge": pkce_challenge["code_challenge"],
-                "code_challenge_method": "S256",
-                "state": "test_state",
-            },
-        )
-        assert response.status_code == 302
-
-        # Extract the authorization code from the redirect URL
-        redirect_url = response.headers["location"]
-        parsed_url = urlparse(redirect_url)
-        query_params = parse_qs(parsed_url.query)
-
-        assert "code" in query_params
-        auth_code = query_params["code"][0]
-
-        # Exchange the authorization code for tokens
-        response = await test_client.post(
-            "/token",
-            data={
-                "grant_type": "authorization_code",
-                "client_id": client_info["client_id"],
-                "client_secret": client_info["client_secret"],
-                "code": auth_code,
-                "code_verifier": pkce_challenge["code_verifier"],
-                "redirect_uri": "https://client.example.com/callback",
-            },
-        )
-        assert response.status_code == 200
-
-        token_response = response.json()
-        assert "access_token" in token_response
-        authorization = f"Bearer {token_response['access_token']}"
-
-        # Test the authenticated endpoint with valid token
-        async with aconnect_sse(
-            test_client, "GET", "/sse", headers={"Authorization": authorization}
-        ) as event_source:
-            assert event_source.response.status_code == 200
-            events = event_source.aiter_sse()
-            sse = await events.__anext__()
-            assert sse.event == "endpoint"
-            assert sse.data.startswith("/messages/?session_id=")
-            messages_uri = sse.data
-
-            # verify that we can now post to the /messages endpoint, and get a response
-            # on the /sse endpoint
             response = await test_client.post(
-                messages_uri,
-                headers={"Authorization": authorization},
-                content=JSONRPCRequest(
-                    jsonrpc="2.0",
-                    id="123",
-                    method="initialize",
-                    params={
-                        "protocolVersion": "2024-11-05",
-                        "capabilities": {
-                            "roots": {"listChanged": True},
-                            "sampling": {},
-                        },
-                        "clientInfo": {"name": "ExampleClient", "version": "1.0.0"},
-                    },
-                ).model_dump_json(),
+                "/messages/",
+                headers={"Authorization": "invalid"},
             )
-            assert response.status_code == 202
-            assert response.content == b"Accepted"
+            assert response.status_code == 403
 
-            sse = await events.__anext__()
-            assert sse.event == "message"
-            sse_data = json.loads(sse.data)
-            assert sse_data["id"] == "123"
-            assert set(sse_data["result"]["capabilities"].keys()) == set(
-                ("experimental", "prompts", "resources", "tools")
+            response = await test_client.post(
+                "/messages/",
+                headers={"Authorization": "Bearer invalid"},
             )
+            assert response.status_code == 403
+
+            # now, become authenticated and try to go through the flow again
+            client_metadata = {
+                "redirect_uris": ["https://client.example.com/callback"],
+                "client_name": "Test Client",
+            }
+
+            response = await test_client.post(
+                "/register",
+                json=client_metadata,
+            )
+            assert response.status_code == 201
+            client_info = response.json()
+
+            # Request authorization using POST with form-encoded data
+            response = await test_client.post(
+                "/authorize",
+                data={
+                    "response_type": "code",
+                    "client_id": client_info["client_id"],
+                    "redirect_uri": "https://client.example.com/callback",
+                    "code_challenge": pkce_challenge["code_challenge"],
+                    "code_challenge_method": "S256",
+                    "state": "test_state",
+                },
+            )
+            assert response.status_code == 302
+
+            # Extract the authorization code from the redirect URL
+            redirect_url = response.headers["location"]
+            parsed_url = urlparse(redirect_url)
+            query_params = parse_qs(parsed_url.query)
+
+            assert "code" in query_params
+            auth_code = query_params["code"][0]
+
+            # Exchange the authorization code for tokens
+            response = await test_client.post(
+                "/token",
+                data={
+                    "grant_type": "authorization_code",
+                    "client_id": client_info["client_id"],
+                    "client_secret": client_info["client_secret"],
+                    "code": auth_code,
+                    "code_verifier": pkce_challenge["code_verifier"],
+                    "redirect_uri": "https://client.example.com/callback",
+                },
+            )
+            assert response.status_code == 200
+
+            token_response = response.json()
+            assert "access_token" in token_response
+            authorization = f"Bearer {token_response['access_token']}"
+
+            # Test the authenticated endpoint with valid token
+            async with aconnect_sse(
+                test_client, "GET", "/sse", headers={"Authorization": authorization}
+            ) as event_source:
+                assert event_source.response.status_code == 200
+                events = event_source.aiter_sse()
+                sse = await events.__anext__()
+                assert sse.event == "endpoint"
+                assert sse.data.startswith("/messages/?session_id=")
+                messages_uri = sse.data
+
+                # verify that we can now post to the /messages endpoint, and get a response
+                # on the /sse endpoint
+                response = await test_client.post(
+                    messages_uri,
+                    headers={"Authorization": authorization},
+                    content=JSONRPCRequest(
+                        jsonrpc="2.0",
+                        id="123",
+                        method="initialize",
+                        params={
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {
+                                "roots": {"listChanged": True},
+                                "sampling": {},
+                            },
+                            "clientInfo": {"name": "ExampleClient", "version": "1.0.0"},
+                        },
+                    ).model_dump_json(),
+                )
+                assert response.status_code == 202
+                assert response.content == b"Accepted"
+
+                sse = await events.__anext__()
+                assert sse.event == "message"
+                sse_data = json.loads(sse.data)
+                assert sse_data["id"] == "123"
+                assert set(sse_data["result"]["capabilities"].keys()) == set(
+                    ("experimental", "prompts", "resources", "tools")
+                )
+                task_group.cancel_scope.cancel()
 
 
 class TestAuthorizeEndpointErrors:

@@ -6,12 +6,13 @@ handle streaming responses like SSE where the app doesn't terminate until
 the connection is closed.
 """
 
-import asyncio
 import typing
 from typing import Any, Dict, Tuple
 
 import anyio
+import anyio.abc
 import anyio.streams.memory
+
 from httpx._models import Request, Response
 from httpx._transports.base import AsyncBaseTransport
 from httpx._types import AsyncByteStream
@@ -41,6 +42,7 @@ class StreamingASGITransport(AsyncBaseTransport):
     def __init__(
         self,
         app: typing.Callable,
+        task_group: anyio.abc.TaskGroup,
         raise_app_exceptions: bool = True,
         root_path: str = "",
         client: Tuple[str, int] = ("127.0.0.1", 123),
@@ -49,6 +51,7 @@ class StreamingASGITransport(AsyncBaseTransport):
         self.raise_app_exceptions = raise_app_exceptions
         self.root_path = root_path
         self.client = client
+        self.task_group = task_group
 
     async def handle_async_request(
         self,
@@ -161,8 +164,8 @@ class StreamingASGITransport(AsyncBaseTransport):
                 response_complete.set()
 
         # Create tasks for running the app and processing messages
-        asyncio.create_task(run_app())
-        asyncio.create_task(process_messages())
+        self.task_group.start_soon(run_app)
+        self.task_group.start_soon(process_messages)
 
         # Wait for the initial response or timeout
         await initial_response_ready.wait()
