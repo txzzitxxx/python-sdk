@@ -1,9 +1,3 @@
-"""
-OAuth server provider interfaces for MCP authorization.
-
-Corresponds to TypeScript file: src/server/auth/provider.ts
-"""
-
 from typing import Literal, Protocol
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
@@ -17,12 +11,6 @@ from mcp.shared.auth import (
 
 
 class AuthorizationParams(BaseModel):
-    """
-    Parameters for the authorization flow.
-
-    Corresponds to AuthorizationParams in src/server/auth/provider.ts
-    """
-
     state: str | None = None
     scopes: list[str] | None = None
     code_challenge: str
@@ -46,12 +34,6 @@ class RefreshToken(BaseModel):
 
 
 class OAuthRegisteredClientsStore(Protocol):
-    """
-    Interface for storing and retrieving registered OAuth clients.
-
-    Corresponds to OAuthRegisteredClientsStore in src/server/auth/clients.ts
-    """
-
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """
         Retrieves client information by client ID.
@@ -66,7 +48,7 @@ class OAuthRegisteredClientsStore(Protocol):
 
     async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """
-        Registers a new client
+        Saves client information as part of registering it.
 
         Args:
             client_info: The client metadata to register.
@@ -75,12 +57,6 @@ class OAuthRegisteredClientsStore(Protocol):
 
 
 class OAuthServerProvider(Protocol):
-    """
-    Implements an end-to-end OAuth server.
-
-    Corresponds to OAuthServerProvider in src/server/auth/provider.ts
-    """
-
     @property
     def clients_store(self) -> OAuthRegisteredClientsStore:
         """

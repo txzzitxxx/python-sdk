@@ -15,13 +15,12 @@ from mcp.server.auth.errors import (
 from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.middleware.client_auth import (
     ClientAuthenticator,
-    ClientAuthRequest,
 )
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.shared.auth import OAuthToken
 
 
-class AuthorizationCodeRequest(ClientAuthRequest):
+class AuthorizationCodeRequest(BaseModel):
     # See https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.3
     grant_type: Literal["authorization_code"]
     code: str = Field(..., description="The authorization code")
@@ -29,15 +28,20 @@ class AuthorizationCodeRequest(ClientAuthRequest):
         ..., description="Must be the same as redirect URI provided in /authorize"
     )
     client_id: str
+    # we use the client_secret param, per https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1
+    client_secret: str | None = None
     # See https://datatracker.ietf.org/doc/html/rfc7636#section-4.5
     code_verifier: str = Field(..., description="PKCE code verifier")
 
 
-class RefreshTokenRequest(ClientAuthRequest):
+class RefreshTokenRequest(BaseModel):
     # See https://datatracker.ietf.org/doc/html/rfc6749#section-6
     grant_type: Literal["refresh_token"]
     refresh_token: str = Field(..., description="The refresh token")
     scope: str | None = Field(None, description="Optional scope parameter")
+    client_id: str
+    # we use the client_secret param, per https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1
+    client_secret: str | None = None
 
 
 class TokenRequest(RootModel):
@@ -103,7 +107,10 @@ class TokenHandler:
             )
 
         try:
-            client_info = await self.client_authenticator(token_request)
+            client_info = await self.client_authenticator.authenticate(
+                client_id=token_request.client_id,
+                client_secret=token_request.client_secret,
+            )
         except InvalidClientError as e:
             return self.response(e.error_response())
 
