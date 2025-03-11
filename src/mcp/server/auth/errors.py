@@ -1,9 +1,3 @@
-"""
-OAuth error classes for MCP authorization.
-
-Corresponds to TypeScript file: src/server/auth/errors.ts
-"""
-
 from typing import Literal
 
 from pydantic import BaseModel, ValidationError
@@ -19,8 +13,6 @@ class ErrorResponse(BaseModel):
 class OAuthError(Exception):
     """
     Base class for all OAuth errors.
-
-    Corresponds to OAuthError in src/server/auth/errors.ts
     """
 
     error_code: ErrorCode
@@ -39,8 +31,6 @@ class OAuthError(Exception):
 class InvalidRequestError(OAuthError):
     """
     Invalid request error.
-
-    Corresponds to InvalidRequestError in src/server/auth/errors.ts
     """
 
     error_code = "invalid_request"
@@ -49,8 +39,6 @@ class InvalidRequestError(OAuthError):
 class InvalidClientError(OAuthError):
     """
     Invalid client error.
-
-    Corresponds to InvalidClientError in src/server/auth/errors.ts
     """
 
     error_code = "invalid_client"

@@ -1,9 +1,3 @@
-"""
-Router for OAuth authorization endpoints.
-
-Corresponds to TypeScript file: src/server/auth/router.ts
-"""
-
 from dataclasses import dataclass
 from typing import Any
 
@@ -71,8 +65,6 @@ def create_auth_router(
 ) -> Router:
     """
     Create a Starlette router with standard MCP authorization endpoints.
-
-    Corresponds to mcpAuthRouter in src/server/auth/router.ts
 
     Args:
         provider: OAuth server provider

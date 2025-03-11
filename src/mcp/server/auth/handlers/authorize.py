@@ -1,9 +1,3 @@
-"""
-Handler for OAuth 2.0 Authorization endpoint.
-
-Corresponds to TypeScript file: src/server/auth/handlers/authorize.ts
-"""
-
 import logging
 from dataclasses import dataclass
 from typing import Literal

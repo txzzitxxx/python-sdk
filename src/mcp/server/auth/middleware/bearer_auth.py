@@ -1,9 +1,3 @@
-"""
-Bearer token authentication middleware for ASGI applications.
-
-Corresponds to TypeScript file: src/server/auth/middleware/bearerAuth.ts
-"""
-
 import time
 from typing import Any, Callable
 
@@ -65,8 +59,6 @@ class RequireAuthMiddleware:
 
     This will validate the token with the auth provider and store the resulting
     auth info in the request state.
-
-    Corresponds to bearerAuthMiddleware in src/server/auth/middleware/bearerAuth.ts
     """
 
     def __init__(self, app: Any, required_scopes: list[str]):

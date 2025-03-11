@@ -1,9 +1,3 @@
-"""
-Client authentication middleware for ASGI applications.
-
-Corresponds to TypeScript file: src/server/auth/middleware/clientAuth.ts
-"""
-
 import time
 
 from pydantic import BaseModel
@@ -14,12 +8,7 @@ from mcp.shared.auth import OAuthClientInformationFull
 
 
 class ClientAuthRequest(BaseModel):
-    """
-    Model for client authentication request body.
-
-    Corresponds to ClientAuthenticatedRequestSchema in
-    src/server/auth/middleware/clientAuth.ts
-    """
+    # TODO: mix this directly into TokenRequest
 
     client_id: str
     client_secret: str | None = None

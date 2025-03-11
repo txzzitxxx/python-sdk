@@ -1,9 +1,3 @@
-"""
-Authorization types and models for MCP OAuth implementation.
-
-Corresponds to TypeScript file: src/shared/auth.ts
-"""
-
 from typing import Any, List, Literal, Optional
 
 from pydantic import AnyHttpUrl, BaseModel, Field
@@ -60,8 +54,6 @@ class OAuthClientMetadata(BaseModel):
 class OAuthClientInformation(BaseModel):
     """
     RFC 7591 OAuth 2.0 Dynamic Client Registration client information.
-
-    Corresponds to OAuthClientInformationSchema in src/shared/auth.ts
     """
 
     client_id: str
@@ -74,8 +66,6 @@ class OAuthClientInformationFull(OAuthClientMetadata, OAuthClientInformation):
     """
     RFC 7591 OAuth 2.0 Dynamic Client Registration full response
     (client information plus metadata).
-
-    Corresponds to OAuthClientInformationFullSchema in src/shared/auth.ts
     """
 
     pass
@@ -84,8 +74,6 @@ class OAuthClientInformationFull(OAuthClientMetadata, OAuthClientInformation):
 class OAuthClientRegistrationError(BaseModel):
     """
     RFC 7591 OAuth 2.0 Dynamic Client Registration error response.
-
-    Corresponds to OAuthClientRegistrationErrorSchema in src/shared/auth.ts
     """
 
     error: str
@@ -95,8 +83,6 @@ class OAuthClientRegistrationError(BaseModel):
 class OAuthMetadata(BaseModel):
     """
     RFC 8414 OAuth 2.0 Authorization Server Metadata.
-
-    Corresponds to OAuthMetadataSchema in src/shared/auth.ts
     """
 
     issuer: str

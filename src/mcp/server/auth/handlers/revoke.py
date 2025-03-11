@@ -1,9 +1,3 @@
-"""
-Handler for OAuth 2.0 Token Revocation.
-
-Corresponds to TypeScript file: src/server/auth/handlers/revoke.ts
-"""
-
 from dataclasses import dataclass
 from typing import Literal
 

@@ -1,9 +1,3 @@
-"""
-Handler for OAuth 2.0 Authorization Server Metadata.
-
-Corresponds to TypeScript file: src/server/auth/handlers/metadata.ts
-"""
-
 from dataclasses import dataclass
 from typing import Any
 

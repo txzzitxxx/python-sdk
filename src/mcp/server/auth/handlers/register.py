@@ -1,9 +1,3 @@
-"""
-Handler for OAuth 2.0 Dynamic Client Registration.
-
-Corresponds to TypeScript file: src/server/auth/handlers/register.ts
-"""
-
 import secrets
 import time
 from dataclasses import dataclass

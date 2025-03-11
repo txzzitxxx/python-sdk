@@ -1,9 +1,3 @@
-"""
-Handler for OAuth 2.0 Token endpoint.
-
-Corresponds to TypeScript file: src/server/auth/handlers/token.ts
-"""
-
 import base64
 import hashlib
 import time
