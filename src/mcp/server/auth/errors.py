@@ -4,7 +4,13 @@ OAuth error classes for MCP authorization.
 Corresponds to TypeScript file: src/server/auth/errors.ts
 """
 
-from typing import Dict, Optional, Any
+from typing import Any, TypedDict
+
+
+class OAuthErrorResponse(TypedDict):
+    """OAuth error response format."""
+    error: str
+    error_description: str
 
 
 class OAuthError(Exception):
@@ -19,7 +25,7 @@ class OAuthError(Exception):
         super().__init__(message)
         self.message = message
         
-    def to_response_object(self) -> Dict[str, str]:
+    def to_response_object(self) -> OAuthErrorResponse:
         """Convert error to JSON response object."""
         return {
             "error": self.error_code,
