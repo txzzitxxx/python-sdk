@@ -211,12 +211,12 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-def construct_redirect_uri(redirect_uri_base: str, authorization_code: AuthorizationCode, state: Optional[str]) -> str:
+def construct_redirect_uri(redirect_uri_base: str, **params: str | None) -> str:
     parsed_uri = urlparse(redirect_uri_base)
     query_params = [(k, v) for k, vs in parse_qs(parsed_uri.query) for v in vs]
-    query_params.append(("code", authorization_code.code))
-    if state:
-        query_params.append(("state", state))
+    for k, v in params.items():
+        if v is not None:
+            query_params.append((k, v))
 
     redirect_uri = urlunparse(
         parsed_uri._replace(query=urlencode(query_params))
