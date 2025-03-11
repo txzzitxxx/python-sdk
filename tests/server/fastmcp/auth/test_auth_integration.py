@@ -887,6 +887,37 @@ class TestAuthEndpoints:
         assert await mock_oauth_provider.load_access_token(
             new_token_response["access_token"]
         ) is None
+    @pytest.mark.anyio
+    async def test_revoke_invalid_token(self, test_client, registered_client):
+        """Test revoking an invalid token."""
+        response = await test_client.post(
+            "/revoke",
+            data={
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "token": "invalid_token",
+            },
+        )
+        # per RFC, this should return 200 even if the token is invalid
+        assert response.status_code == 200
+    @pytest.mark.anyio
+    async def test_revoke_with_malformed_token(self, test_client, registered_client):
+        response = await test_client.post(
+            "/revoke",
+            data={
+                "client_id": registered_client["client_id"],
+                "client_secret": registered_client["client_secret"],
+                "token": 123,
+                "token_type_hint": "asdf"
+            },
+        )
+        assert response.status_code == 400
+        error_response = response.json()
+        assert error_response["error"] == "invalid_request"
+        assert "token_type_hint" in error_response["error_description"]
+    
+
+    
 
 
 class TestFastMCPWithAuth:
