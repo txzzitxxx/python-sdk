@@ -7,7 +7,7 @@ Corresponds to TypeScript file: src/server/auth/provider.ts
 from typing import List, Literal, Optional, Protocol
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from pydantic import AnyHttpUrl, AnyUrl, BaseModel
+from pydantic import AnyHttpUrl, BaseModel
 
 from mcp.server.auth.types import AuthInfo
 from mcp.shared.auth import (
@@ -28,6 +28,7 @@ class AuthorizationParams(BaseModel):
     code_challenge: str
     redirect_uri: AnyHttpUrl
 
+
 class AuthorizationCode(BaseModel):
     code: str
     scopes: list[str]
@@ -35,6 +36,7 @@ class AuthorizationCode(BaseModel):
     client_id: str
     code_challenge: str
     redirect_uri: AnyHttpUrl
+
 
 class RefreshToken(BaseModel):
     token: str
@@ -50,6 +52,7 @@ class OAuthTokenRevocationRequest(BaseModel):
 
     token: str
     token_type_hint: Optional[Literal["access_token", "refresh_token"]] = None
+
 
 class OAuthRegisteredClientsStore(Protocol):
     """
@@ -70,9 +73,7 @@ class OAuthRegisteredClientsStore(Protocol):
         """
         ...
 
-    async def register_client(
-        self, client_info: OAuthClientInformationFull
-    ) -> None:
+    async def register_client(self, client_info: OAuthClientInformationFull) -> None:
         """
         Registers a new client
 
@@ -118,7 +119,7 @@ class OAuthServerProvider(Protocol):
         |            |      |   |    Redirect      |
         |redirect_uri|<-----+   +------------------+
         |            |
-        +------------+          
+        +------------+
 
         Implementations will need to define another handler on the MCP server return
         flow to perform the second redirect, and generates and stores an authorization
@@ -161,8 +162,9 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    async def load_refresh_token(self, client: OAuthClientInformationFull, refresh_token: str) -> RefreshToken | None: 
-        ...
+    async def load_refresh_token(
+        self, client: OAuthClientInformationFull, refresh_token: str
+    ) -> RefreshToken | None: ...
 
     async def exchange_refresh_token(
         self,
@@ -209,6 +211,7 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
+
 def construct_redirect_uri(redirect_uri_base: str, **params: str | None) -> str:
     parsed_uri = urlparse(redirect_uri_base)
     query_params = [(k, v) for k, vs in parse_qs(parsed_uri.query) for v in vs]
@@ -216,7 +219,5 @@ def construct_redirect_uri(redirect_uri_base: str, **params: str | None) -> str:
         if v is not None:
             query_params.append((k, v))
 
-    redirect_uri = urlunparse(
-        parsed_uri._replace(query=urlencode(query_params))
-    )
+    redirect_uri = urlunparse(parsed_uri._replace(query=urlencode(query_params)))
     return redirect_uri

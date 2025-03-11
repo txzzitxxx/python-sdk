@@ -14,7 +14,14 @@ class TokenErrorResponse(BaseModel):
     See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
     """
 
-    error: Literal["invalid_request", "invalid_client", "invalid_grant", "unauthorized_client", "unsupported_grant_type", "invalid_scope"]
+    error: Literal[
+        "invalid_request",
+        "invalid_client",
+        "invalid_grant",
+        "unauthorized_client",
+        "unsupported_grant_type",
+        "invalid_scope",
+    ]
     error_description: Optional[str] = None
     error_uri: Optional[AnyHttpUrl] = None
 
@@ -100,9 +107,6 @@ class OAuthClientRegistrationError(BaseModel):
 
     error: str
     error_description: Optional[str] = None
-
-
-
 
 
 class OAuthMetadata(BaseModel):
