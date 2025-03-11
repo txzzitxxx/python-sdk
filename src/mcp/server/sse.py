@@ -44,6 +44,7 @@ from sse_starlette import EventSourceResponse
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
+from typing_extensions import deprecated
 
 import mcp.types as types
 
@@ -132,7 +133,8 @@ class SseServerTransport:
             # TODO: hold on; shouldn't we be returning the EventSourceResponse?
             # I think this is why the tests hang
             # TODO: we probably shouldn't return response here, since it's a breaking
-            #   change, this is just to test
+            # change
+            # this is just to test
             yield (read_stream, write_stream, response)
 
     async def handle_post_message(

@@ -4,16 +4,15 @@ OAuth server provider interfaces for MCP authorization.
 Corresponds to TypeScript file: src/server/auth/provider.ts
 """
 
-from typing import Protocol
+from typing import List, Literal, Optional, Protocol
+from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
-from pydantic import AnyHttpUrl, BaseModel
-from starlette.responses import Response
+from pydantic import AnyHttpUrl, AnyUrl, BaseModel
 
 from mcp.server.auth.types import AuthInfo
 from mcp.shared.auth import (
     OAuthClientInformationFull,
-    OAuthTokenRevocationRequest,
-    OAuthTokens,
+    TokenSuccessResponse,
 )
 
 
@@ -24,11 +23,33 @@ class AuthorizationParams(BaseModel):
     Corresponds to AuthorizationParams in src/server/auth/provider.ts
     """
 
-    state: str | None = None
-    scopes: list[str] | None = None
+    state: Optional[str] = None
+    scopes: Optional[List[str]] = None
     code_challenge: str
     redirect_uri: AnyHttpUrl
 
+class AuthorizationCode(BaseModel):
+    code: str
+    scopes: list[str]
+    expires_at: float
+    client_id: str
+    code_challenge: str
+    redirect_uri: AnyHttpUrl
+
+class RefreshToken(BaseModel):
+    token: str
+    client_id: str
+    scopes: List[str]
+    expires_at: Optional[int] = None
+
+
+class OAuthTokenRevocationRequest(BaseModel):
+    """
+    # See https://datatracker.ietf.org/doc/html/rfc7009#section-2.1
+    """
+
+    token: str
+    token_type_hint: Optional[Literal["access_token", "refresh_token"]] = None
 
 class OAuthRegisteredClientsStore(Protocol):
     """
@@ -37,7 +58,7 @@ class OAuthRegisteredClientsStore(Protocol):
     Corresponds to OAuthRegisteredClientsStore in src/server/auth/clients.ts
     """
 
-    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
+    async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
         """
         Retrieves client information by client ID.
 
@@ -56,7 +77,7 @@ class OAuthRegisteredClientsStore(Protocol):
         Registers a new client and returns client information.
 
         Args:
-            metadata: The client metadata to register.
+            client_info: The client metadata to register.
 
         Returns:
             The client information, or None if registration failed.
@@ -78,30 +99,46 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    # TODO: do we really want to be putting the response in this method?
     async def authorize(
-        self,
-        client: OAuthClientInformationFull,
-        params: AuthorizationParams,
-        response: Response,
-    ) -> None:
+        self, client: OAuthClientInformationFull, params: AuthorizationParams
+    ) -> str:
         """
-        Begins the authorization flow, which can be implemented by this server or via
-        redirection. Must eventually issue a redirect with authorization response or
-        error to the given redirect URI.
+        Called as part of the /authorize endpoint, and returns a URL that the client
+        will be redirected to.
+        Many MCP implementations will redirect to a third-party provider to perform
+        a second OAuth exchange with that provider. In this sort of setup, the client
+        has an OAuth connection with the MCP server, and the MCP server has an OAuth
+        connection with the 3rd-party provider. At the end of this flow, the client
+        should be redirected to the redirect_uri from params.redirect_uri.
 
-        Args:
-            client: The client requesting authorization.
-            params: Parameters for the authorization request.
-            response: The response object to write to.
+        +--------+     +------------+     +-------------------+
+        |        |     |            |     |                   |
+        | Client | --> | MCP Server | --> | 3rd Party OAuth   |
+        |        |     |            |     | Server            |
+        +--------+     +------------+     +-------------------+
+                            |   ^                  |
+        +------------+      |   |                  |
+        |            |      |   |    Redirect      |
+        |redirect_uri|<-----+   +------------------+
+        |            |
+        +------------+          
+
+        Implementations will need to define another handler on the MCP server return
+        flow to perform the second redirect, and generates and stores an authorization
+        code as part of completing the OAuth authorization step.
+
+        Implementations SHOULD generate an authorization code with at least 160 bits of
+        entropy,
+        and MUST generate an authorization code with at least 128 bits of entropy.
+        See https://datatracker.ietf.org/doc/html/rfc6749#section-10.10.
         """
         ...
 
-    async def challenge_for_authorization_code(
+    async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> str | None:
+    ) -> AuthorizationCode | None:
         """
-        Returns the code_challenge that was used when the indicated authorization began.
+        Loads metadata for the authorization code challenge.
 
         Args:
             client: The client that requested the authorization code.
@@ -113,8 +150,8 @@ class OAuthServerProvider(Protocol):
         ...
 
     async def exchange_authorization_code(
-        self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> OAuthTokens:
+        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
+    ) -> TokenSuccessResponse:
         """
         Exchanges an authorization code for an access token.
 
@@ -127,12 +164,15 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
+    async def load_refresh_token(self, client: OAuthClientInformationFull, refresh_token: str) -> RefreshToken | None: 
+        ...
+
     async def exchange_refresh_token(
         self,
         client: OAuthClientInformationFull,
-        refresh_token: str,
-        scopes: list[str] | None = None,
-    ) -> OAuthTokens:
+        refresh_token: RefreshToken,
+        scopes: List[str],
+    ) -> TokenSuccessResponse:
         """
         Exchanges a refresh token for an access token.
 
@@ -146,9 +186,7 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    # TODO: consider methods to generate refresh tokens and access tokens
-
-    async def verify_access_token(self, token: str) -> AuthInfo:
+    async def load_access_token(self, token: str) -> AuthInfo | None:
         """
         Verifies an access token and returns information about it.
 
@@ -156,7 +194,7 @@ class OAuthServerProvider(Protocol):
             token: The access token to verify.
 
         Returns:
-            Information about the verified token.
+            Information about the verified token, or None if the token is invalid.
         """
         ...
 
@@ -173,3 +211,15 @@ class OAuthServerProvider(Protocol):
             request: The token revocation request.
         """
         ...
+
+def construct_redirect_uri(redirect_uri_base: str, **params: str | None) -> str:
+    parsed_uri = urlparse(redirect_uri_base)
+    query_params = [(k, v) for k, vs in parse_qs(parsed_uri.query) for v in vs]
+    for k, v in params.items():
+        if v is not None:
+            query_params.append((k, v))
+
+    redirect_uri = urlunparse(
+        parsed_uri._replace(query=urlencode(query_params))
+    )
+    return redirect_uri

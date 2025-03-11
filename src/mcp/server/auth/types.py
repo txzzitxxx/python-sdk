@@ -4,6 +4,8 @@ Authorization types for MCP server.
 Corresponds to TypeScript file: src/server/auth/types.ts
 """
 
+from typing import List, Optional
+
 from pydantic import BaseModel
 
 
@@ -16,9 +18,9 @@ class AuthInfo(BaseModel):
 
     token: str
     client_id: str
-    scopes: list[str]
-    expires_at: int | None = None
-    user_id: str | None = None
+    scopes: List[str]
+    expires_at: Optional[int] = None
+    user_id: Optional[str] = None
 
     class Config:
         extra = "ignore"

@@ -5,6 +5,7 @@ Corresponds to TypeScript file: src/server/auth/router.ts
 """
 
 from dataclasses import dataclass
+from typing import Any, Dict, Optional
 
 from pydantic import AnyUrl
 from starlette.routing import Route, Router
@@ -13,7 +14,9 @@ from mcp.server.auth.handlers.authorize import create_authorization_handler
 from mcp.server.auth.handlers.metadata import create_metadata_handler
 from mcp.server.auth.handlers.revoke import create_revocation_handler
 from mcp.server.auth.handlers.token import create_token_handler
-from mcp.server.auth.middleware.client_auth import ClientAuthenticator
+from mcp.server.auth.middleware.client_auth import (
+    ClientAuthenticator,
+)
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.shared.auth import OAuthMetadata
 
@@ -21,7 +24,7 @@ from mcp.shared.auth import OAuthMetadata
 @dataclass
 class ClientRegistrationOptions:
     enabled: bool = False
-    client_secret_expiry_seconds: int | None = None
+    client_secret_expiry_seconds: Optional[int] = None
 
 
 @dataclass
@@ -141,7 +144,7 @@ def create_auth_router(
 
 def build_metadata(
     issuer_url: AnyUrl,
-    service_documentation_url: AnyUrl | None,
+    service_documentation_url: Optional[AnyUrl],
     client_registration_options: ClientRegistrationOptions,
     revocation_options: RevocationOptions,
 ) -> OAuthMetadata:

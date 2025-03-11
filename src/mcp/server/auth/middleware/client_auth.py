@@ -5,7 +5,7 @@ Corresponds to TypeScript file: src/server/auth/middleware/clientAuth.ts
 """
 
 import time
-from typing import Any, Callable
+from typing import Any, Callable, Dict, Optional
 
 from pydantic import BaseModel
 from starlette.exceptions import HTTPException
@@ -32,11 +32,13 @@ class ClientAuthRequest(BaseModel):
 
 class ClientAuthenticator:
     """
-    Dependency that authenticates a client using client_id and client_secret.
-
-    This is a callable that can be used to validate client credentials in a request.
-
-    Corresponds to authenticateClient in src/server/auth/middleware/clientAuth.ts
+    ClientAuthenticator is a callable which validates requests from a client
+    application, used to verify /token and /revoke calls.
+    If, during registration, the client requested to be issued a secret, the
+    authenticator asserts that /token and /register calls must be authenticated with
+    that same token.
+    NOTE: clients can opt for no authentication during registration, in which case this
+    logic is skipped.
     """
 
     def __init__(self, clients_store: OAuthRegisteredClientsStore):
@@ -54,8 +56,8 @@ class ClientAuthenticator:
         if not client:
             raise InvalidClientError("Invalid client_id")
 
-        # If client from the store expects a secret, validate that the request
-        # provides that secret
+        # If client from the store expects a secret, validate that the request provides
+        # that secret
         if client.client_secret:
             if not request.client_secret:
                 raise InvalidClientError("Client secret is required")
@@ -95,7 +97,7 @@ class ClientAuthMiddleware:
         self.app = app
         self.client_auth = ClientAuthenticator(clients_store)
 
-    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+    async def __call__(self, scope: Dict, receive: Callable, send: Callable) -> None:
         """
         Process the request and authenticate the client.
 
