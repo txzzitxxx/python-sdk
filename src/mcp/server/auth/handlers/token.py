@@ -7,7 +7,8 @@ Corresponds to TypeScript file: src/server/auth/handlers/token.ts
 import base64
 import hashlib
 import time
-from typing import Annotated, Callable, Literal
+from dataclasses import dataclass
+from typing import Annotated, Literal
 
 from pydantic import AnyHttpUrl, Field, RootModel, ValidationError
 from starlette.requests import Request
@@ -52,10 +53,12 @@ class TokenRequest(RootModel):
     ]
 
 
-def create_token_handler(
-    provider: OAuthServerProvider, client_authenticator: ClientAuthenticator
-) -> Callable:
-    def response(obj: TokenSuccessResponse | TokenErrorResponse | ErrorResponse):
+@dataclass
+class TokenHandler:
+    provider: OAuthServerProvider
+    client_authenticator: ClientAuthenticator
+
+    def response(self, obj: TokenSuccessResponse | TokenErrorResponse | ErrorResponse):
         status_code = 200
         if isinstance(obj, TokenErrorResponse):
             status_code = 400
@@ -69,12 +72,12 @@ def create_token_handler(
             },
         )
 
-    async def token_handler(request: Request):
+    async def handle(self, request: Request):
         try:
             form_data = await request.form()
             token_request = TokenRequest.model_validate(dict(form_data)).root
         except ValidationError as validation_error:
-            return response(
+            return self.response(
                 TokenErrorResponse(
                     error="invalid_request",
                     error_description=stringify_pydantic_error(validation_error),
@@ -82,12 +85,12 @@ def create_token_handler(
             )
         
         try:
-            client_info = await client_authenticator(token_request)
+            client_info = await self.client_authenticator(token_request)
         except InvalidClientError as e:
-            return response(e.error_response())
+            return self.response(e.error_response())
 
         if token_request.grant_type not in client_info.grant_types:
-            return response(
+            return self.response(
                 TokenErrorResponse(
                     error="unsupported_grant_type",
                     error_description=(
@@ -101,12 +104,12 @@ def create_token_handler(
 
         match token_request:
             case AuthorizationCodeRequest():
-                auth_code = await provider.load_authorization_code(
+                auth_code = await self.provider.load_authorization_code(
                     client_info, token_request.code
                 )
                 if auth_code is None or auth_code.client_id != token_request.client_id:
                     # if code belongs to different client, pretend it doesn't exist
-                    return response(
+                    return self.response(
                         TokenErrorResponse(
                             error="invalid_grant",
                             error_description="authorization code does not exist",
@@ -116,7 +119,7 @@ def create_token_handler(
                 # make auth codes expire after a deadline
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.5
                 if auth_code.expires_at < time.time():
-                    return response(
+                    return self.response(
                         TokenErrorResponse(
                             error="invalid_grant",
                             error_description="authorization code has expired",
@@ -126,7 +129,7 @@ def create_token_handler(
                 # verify redirect_uri doesn't change between /authorize and /tokens
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
                 if token_request.redirect_uri != auth_code.redirect_uri:
-                    return response(
+                    return self.response(
                         TokenErrorResponse(
                             error="invalid_request",
                             error_description=(
@@ -144,7 +147,7 @@ def create_token_handler(
 
                 if hashed_code_verifier != auth_code.code_challenge:
                     # see https://datatracker.ietf.org/doc/html/rfc7636#section-4.6
-                    return response(
+                    return self.response(
                         TokenErrorResponse(
                             error="invalid_grant",
                             error_description="incorrect code_verifier",
@@ -152,12 +155,12 @@ def create_token_handler(
                     )
 
                 # Exchange authorization code for tokens
-                tokens = await provider.exchange_authorization_code(
+                tokens = await self.provider.exchange_authorization_code(
                     client_info, auth_code
                 )
 
             case RefreshTokenRequest():
-                refresh_token = await provider.load_refresh_token(
+                refresh_token = await self.provider.load_refresh_token(
                     client_info, token_request.refresh_token
                 )
                 if (
@@ -165,7 +168,7 @@ def create_token_handler(
                     or refresh_token.client_id != token_request.client_id
                 ):
                     # if token belongs to different client, pretend it doesn't exist
-                    return response(
+                    return self.response(
                         TokenErrorResponse(
                             error="invalid_grant",
                             error_description="refresh token does not exist",
@@ -174,7 +177,7 @@ def create_token_handler(
 
                 if refresh_token.expires_at and refresh_token.expires_at < time.time():
                     # if the refresh token has expired, pretend it doesn't exist
-                    return response(
+                    return self.response(
                         TokenErrorResponse(
                             error="invalid_grant",
                             error_description="refresh token has expired",
@@ -190,20 +193,19 @@ def create_token_handler(
 
                 for scope in scopes:
                     if scope not in refresh_token.scopes:
-                        return response(
+                        return self.response(
                             TokenErrorResponse(
                                 error="invalid_scope",
                                 error_description=(
-                        f"cannot request scope `{scope}` not provided by refresh token"
-                    ),
+                                    f"cannot request scope `{scope}` "
+                                    "not provided by refresh token"
+                                ),
                             )
                         )
 
                 # Exchange refresh token for new tokens
-                tokens = await provider.exchange_refresh_token(
+                tokens = await self.provider.exchange_refresh_token(
                     client_info, refresh_token, scopes
                 )
 
-        return response(tokens)
-
-    return token_handler
+        return self.response(tokens)

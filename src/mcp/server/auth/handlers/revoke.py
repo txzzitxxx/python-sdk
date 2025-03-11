@@ -4,7 +4,7 @@ Handler for OAuth 2.0 Token Revocation.
 Corresponds to TypeScript file: src/server/auth/handlers/revoke.ts
 """
 
-from typing import Callable
+from dataclasses import dataclass
 
 from pydantic import ValidationError
 from starlette.requests import Request
@@ -27,10 +27,12 @@ class RevocationRequest(OAuthTokenRevocationRequest, ClientAuthRequest):
     pass
 
 
-def create_revocation_handler(
-    provider: OAuthServerProvider, client_authenticator: ClientAuthenticator
-) -> Callable:
-    async def revocation_handler(request: Request) -> Response:
+@dataclass
+class RevocationHandler:
+    provider: OAuthServerProvider
+    client_authenticator: ClientAuthenticator
+
+    async def handle(self, request: Request) -> Response:
         """
         Handler for the OAuth 2.0 Token Revocation endpoint.
         """
@@ -48,13 +50,13 @@ def create_revocation_handler(
 
         # Authenticate client
         try:
-            client_auth_result = await client_authenticator(revocation_request)
+            client_auth_result = await self.client_authenticator(revocation_request)
         except InvalidClientError as e:
             return PydanticJSONResponse(status_code=401, content=e.error_response())
 
         # Revoke token
-        if provider.revoke_token:
-            await provider.revoke_token(client_auth_result, revocation_request)
+        if self.provider.revoke_token:
+            await self.provider.revoke_token(client_auth_result, revocation_request)
 
         # Return successful empty response
         return Response(
@@ -64,5 +66,3 @@ def create_revocation_handler(
                 "Pragma": "no-cache",
             },
         )
-
-    return revocation_handler

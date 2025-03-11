@@ -5,7 +5,8 @@ Corresponds to TypeScript file: src/server/auth/handlers/authorize.ts
 """
 
 import logging
-from typing import Callable, Literal
+from dataclasses import dataclass
+from typing import Literal
 from urllib.parse import urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, AnyUrl, BaseModel, Field, RootModel, ValidationError
@@ -117,8 +118,11 @@ class AnyHttpUrlModel(RootModel):
     root: AnyHttpUrl
 
 
-def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
-    async def authorization_handler(request: Request) -> Response:
+@dataclass
+class AuthorizationHandler:
+    provider: OAuthServerProvider
+
+    async def handle(self, request: Request) -> Response:
         # implements authorization requests for grant_type=code;
         # see https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.1
 
@@ -134,7 +138,7 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
             if client is None and attempt_load_client:
                 # make last-ditch attempt to load the client
                 client_id = best_effort_extract_string("client_id", params)
-                client = client_id and await provider.clients_store.get_client(
+                client = client_id and await self.provider.clients_store.get_client(
                     client_id
                 )
             if redirect_uri is None and client:
@@ -200,7 +204,9 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
                 )
 
             # Get client information
-            client = await provider.clients_store.get_client(auth_request.client_id)
+            client = await self.provider.clients_store.get_client(
+                auth_request.client_id,
+            )
             if not client:
                 # For client_id validation errors, return direct error (no redirect)
                 return await error_response(
@@ -241,7 +247,10 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
             response = RedirectResponse(
                 url="", status_code=302, headers={"Cache-Control": "no-store"}
             )
-            response.headers["location"] = await provider.authorize(client, auth_params)
+            response.headers["location"] = await self.provider.authorize(
+                client,
+                auth_params,
+            )
             return response
 
         except Exception as validation_error:
@@ -253,7 +262,6 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
                 error="server_error", error_description="An unexpected error occurred"
             )
 
-    return authorization_handler
 
 
 def create_error_redirect(

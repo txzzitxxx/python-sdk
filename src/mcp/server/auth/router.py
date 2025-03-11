@@ -10,13 +10,12 @@ from typing import Any
 from pydantic import AnyUrl
 from starlette.routing import Route, Router
 
-from mcp.server.auth.handlers.authorize import create_authorization_handler
-from mcp.server.auth.handlers.metadata import create_metadata_handler
-from mcp.server.auth.handlers.revoke import create_revocation_handler
-from mcp.server.auth.handlers.token import create_token_handler
-from mcp.server.auth.middleware.client_auth import (
-    ClientAuthenticator,
-)
+from mcp.server.auth.handlers.authorize import AuthorizationHandler
+from mcp.server.auth.handlers.metadata import MetadataHandler
+from mcp.server.auth.handlers.register import RegistrationHandler
+from mcp.server.auth.handlers.revoke import RevocationHandler
+from mcp.server.auth.handlers.token import TokenHandler
+from mcp.server.auth.middleware.client_auth import ClientAuthenticator
 from mcp.server.auth.provider import OAuthServerProvider
 
 
@@ -105,37 +104,39 @@ def create_auth_router(
         routes=[
             Route(
                 "/.well-known/oauth-authorization-server",
-                endpoint=create_metadata_handler(metadata),
+                endpoint=MetadataHandler(metadata).handle,
                 methods=["GET"],
             ),
             Route(
                 AUTHORIZATION_PATH,
-                endpoint=create_authorization_handler(provider),
+                endpoint=AuthorizationHandler(provider).handle,
                 methods=["GET", "POST"],
             ),
             Route(
                 TOKEN_PATH,
-                endpoint=create_token_handler(provider, client_authenticator),
+                endpoint=TokenHandler(provider, client_authenticator).handle,
                 methods=["POST"],
             ),
         ]
     )
 
     if client_registration_options.enabled:
-        from mcp.server.auth.handlers.register import create_registration_handler
-
-        registration_handler = create_registration_handler(
+        registration_handler = RegistrationHandler(
             provider.clients_store,
             client_secret_expiry_seconds=client_registration_options.client_secret_expiry_seconds,
         )
         auth_router.routes.append(
-            Route(REGISTRATION_PATH, endpoint=registration_handler, methods=["POST"])
+            Route(
+                REGISTRATION_PATH,
+                endpoint=registration_handler.handle,
+                methods=["POST"],
+            )
         )
 
     if revocation_options.enabled:
-        revocation_handler = create_revocation_handler(provider, client_authenticator)
+        revocation_handler = RevocationHandler(provider, client_authenticator)
         auth_router.routes.append(
-            Route(REVOCATION_PATH, endpoint=revocation_handler, methods=["POST"])
+            Route(REVOCATION_PATH, endpoint=revocation_handler.handle, methods=["POST"])
         )
 
     return auth_router

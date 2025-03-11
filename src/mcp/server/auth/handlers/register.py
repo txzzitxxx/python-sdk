@@ -6,7 +6,8 @@ Corresponds to TypeScript file: src/server/auth/handlers/register.ts
 
 import secrets
 import time
-from typing import Callable, Literal
+from dataclasses import dataclass
+from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ValidationError
@@ -29,10 +30,11 @@ class ErrorResponse(BaseModel):
     error_description: str
 
 
-def create_registration_handler(
-    clients_store: OAuthRegisteredClientsStore, client_secret_expiry_seconds: int | None
-) -> Callable:
-    async def registration_handler(request: Request) -> Response:
+@dataclass
+class RegistrationHandler:
+    clients_store: OAuthRegisteredClientsStore
+    client_secret_expiry_seconds: int | None
+    async def handle(self, request: Request) -> Response:
         # Implements dynamic client registration as defined in https://datatracker.ietf.org/doc/html/rfc7591#section-3.1
         try:
             # Parse request body as JSON
@@ -55,8 +57,8 @@ def create_registration_handler(
 
         client_id_issued_at = int(time.time())
         client_secret_expires_at = (
-            client_id_issued_at + client_secret_expiry_seconds
-            if client_secret_expiry_seconds is not None
+            client_id_issued_at + self.client_secret_expiry_seconds
+            if self.client_secret_expiry_seconds is not None
             else None
         )
 
@@ -83,9 +85,7 @@ def create_registration_handler(
             software_version=client_metadata.software_version,
         )
         # Register client
-        await clients_store.register_client(client_info)
+        await self.clients_store.register_client(client_info)
 
         # Return client information
         return PydanticJSONResponse(content=client_info, status_code=201)
-
-    return registration_handler
