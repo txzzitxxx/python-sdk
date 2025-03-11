@@ -216,7 +216,7 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
                 # For redirect_uri validation errors, return direct error (no redirect)
                 return await error_response(
                     error="invalid_request",
-                    error_description=validation_error.message,
+                    error_description=validation_error.error_description,
                 )
 
             # Validate scope - for scope errors, we can redirect
@@ -226,7 +226,7 @@ def create_authorization_handler(provider: OAuthServerProvider) -> Callable:
                 # For scope errors, redirect with error parameters
                 return await error_response(
                     error="invalid_scope",
-                    error_description=validation_error.message,
+                    error_description=validation_error.error_description,
                 )
 
             # Setup authorization parameters

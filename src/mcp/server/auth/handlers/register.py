@@ -83,9 +83,9 @@ def create_registration_handler(
             software_version=client_metadata.software_version,
         )
         # Register client
-        client = await clients_store.register_client(client_info)
+        await clients_store.register_client(client_info)
 
         # Return client information
-        return PydanticJSONResponse(content=client, status_code=201)
+        return PydanticJSONResponse(content=client_info, status_code=201)
 
     return registration_handler

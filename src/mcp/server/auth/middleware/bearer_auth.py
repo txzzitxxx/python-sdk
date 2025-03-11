@@ -16,7 +16,6 @@ from starlette.exceptions import HTTPException
 from starlette.requests import HTTPConnection
 from starlette.types import Scope
 
-from mcp.server.auth.errors import InsufficientScopeError, InvalidTokenError, OAuthError
 from mcp.server.auth.provider import OAuthServerProvider
 from mcp.server.auth.types import AuthInfo
 
@@ -51,21 +50,17 @@ class BearerAuthBackend(AuthenticationBackend):
 
         token = auth_header[7:]  # Remove "Bearer " prefix
 
-        try:
-            # Validate the token with the provider
-            auth_info = await self.provider.load_access_token(token)
+        # Validate the token with the provider
+        auth_info = await self.provider.load_access_token(token)
 
-            if not auth_info:
-                raise InvalidTokenError("Invalid access token")
-
-            if auth_info.expires_at and auth_info.expires_at < int(time.time()):
-                raise InvalidTokenError("Token has expired")
-
-            return AuthCredentials(auth_info.scopes), AuthenticatedUser(auth_info)
-
-        except (InvalidTokenError, InsufficientScopeError, OAuthError):
-            # Return None to indicate authentication failure
+        if not auth_info:
             return None
+
+        if auth_info.expires_at and auth_info.expires_at < int(time.time()):
+            return None
+
+        return AuthCredentials(auth_info.scopes), AuthenticatedUser(auth_info)
+
 
 
 class RequireAuthMiddleware:

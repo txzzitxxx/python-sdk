@@ -13,6 +13,8 @@ from pydantic import AnyHttpUrl, Field, RootModel, ValidationError
 from starlette.requests import Request
 
 from mcp.server.auth.errors import (
+    ErrorResponse,
+    InvalidClientError,
     stringify_pydantic_error,
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
@@ -53,7 +55,7 @@ class TokenRequest(RootModel):
 def create_token_handler(
     provider: OAuthServerProvider, client_authenticator: ClientAuthenticator
 ) -> Callable:
-    def response(obj: TokenSuccessResponse | TokenErrorResponse):
+    def response(obj: TokenSuccessResponse | TokenErrorResponse | ErrorResponse):
         status_code = 200
         if isinstance(obj, TokenErrorResponse):
             status_code = 400
@@ -78,7 +80,11 @@ def create_token_handler(
                     error_description=stringify_pydantic_error(validation_error),
                 )
             )
-        client_info = await client_authenticator(token_request)
+        
+        try:
+            client_info = await client_authenticator(token_request)
+        except InvalidClientError as e:
+            return response(e.error_response())
 
         if token_request.grant_type not in client_info.grant_types:
             return response(
@@ -124,8 +130,9 @@ def create_token_handler(
                         TokenErrorResponse(
                             error="invalid_request",
                             error_description=(
-                        "redirect_uri didn't match the one used when creating auth code"
-                    ),
+                                "redirect_uri did not match the one "
+                                "used when creating auth code"
+                            ),
                         )
                     )
 

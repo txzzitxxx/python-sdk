@@ -11,6 +11,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from mcp.server.auth.errors import (
+    InvalidClientError,
     stringify_pydantic_error,
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
@@ -46,7 +47,10 @@ def create_revocation_handler(
             )
 
         # Authenticate client
-        client_auth_result = await client_authenticator(revocation_request)
+        try:
+            client_auth_result = await client_authenticator(revocation_request)
+        except InvalidClientError as e:
+            return PydanticJSONResponse(status_code=401, content=e.error_response())
 
         # Revoke token
         if provider.revoke_token:

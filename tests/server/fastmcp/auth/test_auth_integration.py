@@ -18,7 +18,6 @@ from pydantic import AnyUrl
 from starlette.applications import Starlette
 from starlette.routing import Mount
 
-from mcp.server.auth.errors import InvalidTokenError
 from mcp.server.auth.provider import (
     AuthorizationCode,
     AuthorizationParams,
@@ -97,8 +96,7 @@ class MockOAuthProvider(OAuthServerProvider):
     async def exchange_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
     ) -> TokenSuccessResponse:
-        if authorization_code.code not in self.auth_codes:
-            raise InvalidTokenError("Invalid authorization code")
+        assert authorization_code.code in self.auth_codes
 
         # Generate an access token and refresh token
         access_token = f"access_{secrets.token_hex(32)}"
@@ -152,19 +150,16 @@ class MockOAuthProvider(OAuthServerProvider):
         scopes: List[str],
     ) -> TokenSuccessResponse:
         # Check if refresh token exists
-        if refresh_token.token not in self.refresh_tokens:
-            raise InvalidTokenError("Invalid refresh token")
+        assert refresh_token.token in self.refresh_tokens
 
         old_access_token = self.refresh_tokens[refresh_token.token]
 
         # Check if the access token exists
-        if old_access_token not in self.tokens:
-            raise InvalidTokenError("Invalid refresh token")
+        assert old_access_token in self.tokens
 
         # Check if the token was issued to this client
         token_info = self.tokens[old_access_token]
-        if token_info.client_id != client.client_id:
-            raise InvalidTokenError("Refresh token was not issued to this client")
+        assert token_info.client_id == client.client_id
 
         # Generate a new access token and refresh token
         new_access_token = f"access_{secrets.token_hex(32)}"
@@ -1016,6 +1011,18 @@ class TestFastMCPWithAuth:
         response = await test_client.post("/messages/")
         # TODO: we should return 401/403 depending on whether authn or authz fails
         assert response.status_code == 403, response.content
+
+        response = await test_client.post(
+            "/messages/",
+            headers={"Authorization": "invalid"},
+        )
+        assert response.status_code == 403
+
+        response = await test_client.post(
+            "/messages/",
+            headers={"Authorization": "Bearer invalid"},
+        )
+        assert response.status_code == 403
 
         # now, become authenticated and try to go through the flow again
         client_metadata = {

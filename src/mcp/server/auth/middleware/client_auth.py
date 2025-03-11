@@ -5,11 +5,9 @@ Corresponds to TypeScript file: src/server/auth/middleware/clientAuth.ts
 """
 
 import time
-from typing import Any, Callable, Dict, Optional
+from typing import Optional
 
 from pydantic import BaseModel
-from starlette.exceptions import HTTPException
-from starlette.requests import Request
 
 from mcp.server.auth.errors import (
     InvalidClientError,

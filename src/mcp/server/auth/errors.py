@@ -4,9 +4,15 @@ OAuth error classes for MCP authorization.
 Corresponds to TypeScript file: src/server/auth/errors.ts
 """
 
-from typing import Dict
+from typing import Literal
 
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
+
+ErrorCode = Literal["invalid_request", "invalid_client"]
+
+class ErrorResponse(BaseModel):
+    error: ErrorCode
+    error_description: str
 
 
 class OAuthError(Exception):
@@ -16,25 +22,17 @@ class OAuthError(Exception):
     Corresponds to OAuthError in src/server/auth/errors.ts
     """
 
-    error_code: str = "server_error"
+    error_code: ErrorCode
 
-    def __init__(self, message: str):
-        super().__init__(message)
-        self.message = message
+    def __init__(self, error_description: str):
+        super().__init__(error_description)
+        self.error_description = error_description
 
-    def to_response_object(self) -> Dict[str, str]:
-        """Convert error to JSON response object."""
-        return {"error": self.error_code, "error_description": self.message}
-
-
-class ServerError(OAuthError):
-    """
-    Server error.
-
-    Corresponds to ServerError in src/server/auth/errors.ts
-    """
-
-    error_code = "server_error"
+    def error_response(self) -> ErrorResponse:
+        return ErrorResponse(
+            error=self.error_code,
+            error_description=self.error_description,
+        )
 
 
 class InvalidRequestError(OAuthError):
@@ -55,96 +53,6 @@ class InvalidClientError(OAuthError):
     """
 
     error_code = "invalid_client"
-
-
-class InvalidGrantError(OAuthError):
-    """
-    Invalid grant error.
-
-    Corresponds to InvalidGrantError in src/server/auth/errors.ts
-    """
-
-    error_code = "invalid_grant"
-
-
-class UnauthorizedClientError(OAuthError):
-    """
-    Unauthorized client error.
-
-    Corresponds to UnauthorizedClientError in src/server/auth/errors.ts
-    """
-
-    error_code = "unauthorized_client"
-
-
-class UnsupportedGrantTypeError(OAuthError):
-    """
-    Unsupported grant type error.
-
-    Corresponds to UnsupportedGrantTypeError in src/server/auth/errors.ts
-    """
-
-    error_code = "unsupported_grant_type"
-
-
-class UnsupportedResponseTypeError(OAuthError):
-    """
-    Unsupported response type error.
-
-    Corresponds to UnsupportedResponseTypeError in src/server/auth/errors.ts
-    """
-
-    error_code = "unsupported_response_type"
-
-
-class InvalidScopeError(OAuthError):
-    """
-    Invalid scope error.
-
-    Corresponds to InvalidScopeError in src/server/auth/errors.ts
-    """
-
-    error_code = "invalid_scope"
-
-
-class AccessDeniedError(OAuthError):
-    """
-    Access denied error.
-
-    Corresponds to AccessDeniedError in src/server/auth/errors.ts
-    """
-
-    error_code = "access_denied"
-
-
-class TemporarilyUnavailableError(OAuthError):
-    """
-    Temporarily unavailable error.
-
-    Corresponds to TemporarilyUnavailableError in src/server/auth/errors.ts
-    """
-
-    error_code = "temporarily_unavailable"
-
-
-class InvalidTokenError(OAuthError):
-    """
-    Invalid token error.
-
-    Corresponds to InvalidTokenError in src/server/auth/errors.ts
-    """
-
-    error_code = "invalid_token"
-
-
-class InsufficientScopeError(OAuthError):
-    """
-    Insufficient scope error.
-
-    Corresponds to InsufficientScopeError in src/server/auth/errors.ts
-    """
-
-    error_code = "insufficient_scope"
 
 
 def stringify_pydantic_error(validation_error: ValidationError) -> str:
