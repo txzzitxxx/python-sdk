@@ -1119,6 +1119,9 @@ class TestFastMCPWithAuth:
                 assert set(sse_data["result"]["capabilities"].keys()) == set(
                     ("experimental", "prompts", "resources", "tools")
                 )
+                # the /sse endpoint will never finish; normally, the client could just
+                # disconnect, but in tests the easiest way to do this is to cancel the
+                # task group
                 task_group.cancel_scope.cancel()
 
 
