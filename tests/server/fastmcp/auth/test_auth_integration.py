@@ -20,6 +20,7 @@ from starlette.applications import Starlette
 from starlette.routing import Mount
 
 from mcp.server.auth.provider import (
+    AuthInfo,
     AuthorizationCode,
     AuthorizationParams,
     OAuthRegisteredClientsStore,
@@ -32,7 +33,6 @@ from mcp.server.auth.router import (
     RevocationOptions,
     create_auth_router,
 )
-from mcp.server.auth.types import AuthInfo
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import (
     OAuthClientInformationFull,

@@ -3,7 +3,6 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, BaseModel
 
-from mcp.server.auth.types import AuthInfo
 from mcp.shared.auth import (
     OAuthClientInformationFull,
     OAuthToken,
@@ -27,6 +26,13 @@ class AuthorizationCode(BaseModel):
 
 
 class RefreshToken(BaseModel):
+    token: str
+    client_id: str
+    scopes: list[str]
+    expires_at: int | None = None
+
+
+class AuthInfo(BaseModel):
     token: str
     client_id: str
     scopes: list[str]
