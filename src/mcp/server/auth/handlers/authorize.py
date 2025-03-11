@@ -250,7 +250,7 @@ class AuthorizationHandler:
                     auth_params,
                 ),
                 status_code=302,
-                headers={"Cache-Control": "no-store"}
+                headers={"Cache-Control": "no-store"},
             )
 
         except Exception as validation_error:
@@ -261,7 +261,6 @@ class AuthorizationHandler:
             return await error_response(
                 error="server_error", error_description="An unexpected error occurred"
             )
-
 
 
 def create_error_redirect(

@@ -59,7 +59,6 @@ class BearerAuthBackend(AuthenticationBackend):
         return AuthCredentials(auth_info.scopes), AuthenticatedUser(auth_info)
 
 
-
 class RequireAuthMiddleware:
     """
     Middleware that requires a valid Bearer token in the Authorization header.

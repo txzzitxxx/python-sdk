@@ -34,6 +34,7 @@ class ErrorResponse(BaseModel):
 class RegistrationHandler:
     clients_store: OAuthRegisteredClientsStore
     client_secret_expiry_seconds: int | None
+
     async def handle(self, request: Request) -> Response:
         # Implements dynamic client registration as defined in https://datatracker.ietf.org/doc/html/rfc7591#section-3.1
         try:

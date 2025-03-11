@@ -52,9 +52,7 @@ class MockClientStore:
     async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
         return self.clients.get(client_id)
 
-    async def register_client(
-        self, client_info: OAuthClientInformationFull
-    ):
+    async def register_client(self, client_info: OAuthClientInformationFull):
         self.clients[client_info.client_id] = client_info
 
 
@@ -750,12 +748,9 @@ class TestAuthEndpoints:
         error_data = response.json()
         assert "error" in error_data
         assert error_data["error"] == "invalid_client_metadata"
-        assert (
-            error_data["error_description"]
-            == (
-                "redirect_uris.0: Input should be a valid URL, "
-                "relative URL without a base"
-            )
+        assert error_data["error_description"] == (
+            "redirect_uris.0: Input should be a valid URL, "
+            "relative URL without a base"
         )
 
     @pytest.mark.anyio

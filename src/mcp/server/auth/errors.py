@@ -10,6 +10,7 @@ from pydantic import BaseModel, ValidationError
 
 ErrorCode = Literal["invalid_request", "invalid_client"]
 
+
 class ErrorResponse(BaseModel):
     error: ErrorCode
     error_description: str

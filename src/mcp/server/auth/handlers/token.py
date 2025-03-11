@@ -83,7 +83,7 @@ class TokenHandler:
                     error_description=stringify_pydantic_error(validation_error),
                 )
             )
-        
+
         try:
             client_info = await self.client_authenticator(token_request)
         except InvalidClientError as e:
