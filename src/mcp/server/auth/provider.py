@@ -1,4 +1,4 @@
-from typing import Literal, Protocol
+from typing import Protocol
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, BaseModel
@@ -172,8 +172,7 @@ class OAuthServerProvider(Protocol):
 
     async def revoke_token(
         self,
-        token: str,
-        token_type_hint: Literal["access_token", "refresh_token"] | None = None,
+        token: AuthInfo | RefreshToken,
     ) -> None:
         """
         Revokes an access or refresh token.

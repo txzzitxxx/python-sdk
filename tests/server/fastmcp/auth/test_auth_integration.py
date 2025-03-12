@@ -8,7 +8,6 @@ import json
 import secrets
 import time
 import unittest.mock
-from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
 import anyio
@@ -164,11 +163,12 @@ class MockOAuthProvider(OAuthServerProvider):
         new_refresh_token = f"refresh_{secrets.token_hex(32)}"
 
         # Store the new tokens
-        self.tokens[new_access_token] = {
-            "client_id": client.client_id,
-            "scopes": scopes or token_info.scopes,
-            "expires_at": int(time.time()) + 3600,
-        }
+        self.tokens[new_access_token] = AuthInfo(
+            token=new_access_token,
+            client_id=client.client_id,
+            scopes=scopes or token_info.scopes,
+            expires_at=int(time.time()) + 3600,
+        )
 
         self.refresh_tokens[new_refresh_token] = new_access_token
 
@@ -198,25 +198,20 @@ class MockOAuthProvider(OAuthServerProvider):
             expires_at=token_info.expires_at,
         )
 
-    async def revoke_token(
-        self,
-        token: str,
-        token_type_hint: Literal["access_token", "refresh_token"] | None = None,
-    ) -> None:
-        # Check if it's a refresh token
-        if token in self.refresh_tokens:
-            # Remove the refresh token
-            del self.refresh_tokens[token]
+    async def revoke_token(self, token: OAuthToken | RefreshToken) -> None:
+        match token:
+            case RefreshToken():
+                # Remove the refresh token
+                del self.refresh_tokens[token.token]
 
-        # Check if it's an access token
-        elif token in self.tokens:
-            # Remove the access token
-            del self.tokens[token]
+            case AuthInfo():
+                # Remove the access token
+                del self.tokens[token.token]
 
-            # Also remove any refresh tokens that point to this access token
-            for refresh_token, access_token in list(self.refresh_tokens.items()):
-                if access_token == token:
-                    del self.refresh_tokens[refresh_token]
+                # Also remove any refresh tokens that point to this access token
+                for refresh_token, access_token in list(self.refresh_tokens.items()):
+                    if access_token == token.token:
+                        del self.refresh_tokens[refresh_token]
 
 
 @pytest.fixture
