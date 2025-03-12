@@ -1,4 +1,4 @@
-from typing import Any, List, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import AnyHttpUrl, BaseModel, Field
 
@@ -10,9 +10,9 @@ class OAuthToken(BaseModel):
 
     access_token: str
     token_type: Literal["bearer"] = "bearer"
-    expires_in: Optional[int] = None
-    scope: Optional[str] = None
-    refresh_token: Optional[str] = None
+    expires_in: int | None = None
+    scope: str | None = None
+    refresh_token: str | None = None
 
 
 class OAuthClientMetadata(BaseModel):
@@ -22,7 +22,7 @@ class OAuthClientMetadata(BaseModel):
     for the full specification.
     """
 
-    redirect_uris: List[AnyHttpUrl] = Field(..., min_length=1)
+    redirect_uris: list[AnyHttpUrl] = Field(..., min_length=1)
     # token_endpoint_auth_method: this implementation only supports none &
     # client_secret_post;
     # ie: we do not support client_secret_basic
@@ -30,25 +30,25 @@ class OAuthClientMetadata(BaseModel):
         "client_secret_post"
     )
     # grant_types: this implementation only supports authorization_code & refresh_token
-    grant_types: List[Literal["authorization_code", "refresh_token"]] = [
+    grant_types: list[Literal["authorization_code", "refresh_token"]] = [
         "authorization_code"
     ]
     # this implementation only supports code; ie: it does not support implicit grants
-    response_types: List[Literal["code"]] = ["code"]
-    scope: Optional[str] = None
+    response_types: list[Literal["code"]] = ["code"]
+    scope: str | None = None
 
     # these fields are currently unused, but we support & store them for potential
     # future use
-    client_name: Optional[str] = None
-    client_uri: Optional[AnyHttpUrl] = None
-    logo_uri: Optional[AnyHttpUrl] = None
-    contacts: Optional[List[str]] = None
-    tos_uri: Optional[AnyHttpUrl] = None
-    policy_uri: Optional[AnyHttpUrl] = None
-    jwks_uri: Optional[AnyHttpUrl] = None
-    jwks: Optional[Any] = None
-    software_id: Optional[str] = None
-    software_version: Optional[str] = None
+    client_name: str | None = None
+    client_uri: AnyHttpUrl | None = None
+    logo_uri: AnyHttpUrl | None = None
+    contacts: list[str] | None = None
+    tos_uri: AnyHttpUrl | None = None
+    policy_uri: AnyHttpUrl | None = None
+    jwks_uri: AnyHttpUrl | None = None
+    jwks: Any | None = None
+    software_id: str | None = None
+    software_version: str | None = None
 
 
 class OAuthClientInformationFull(OAuthClientMetadata):
@@ -58,9 +58,9 @@ class OAuthClientInformationFull(OAuthClientMetadata):
     """
 
     client_id: str
-    client_secret: Optional[str] = None
-    client_id_issued_at: Optional[int] = None
-    client_secret_expires_at: Optional[int] = None
+    client_secret: str | None = None
+    client_id_issued_at: int | None = None
+    client_secret_expires_at: int | None = None
 
 
 class OAuthMetadata(BaseModel):

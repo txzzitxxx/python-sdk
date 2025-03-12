@@ -8,7 +8,7 @@ import json
 import secrets
 import time
 import unittest.mock
-from typing import List, Literal, Optional
+from typing import Literal
 from urllib.parse import parse_qs, urlparse
 
 import anyio
@@ -48,7 +48,7 @@ class MockClientStore:
     def __init__(self):
         self.clients = {}
 
-    async def get_client(self, client_id: str) -> Optional[OAuthClientInformationFull]:
+    async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         return self.clients.get(client_id)
 
     async def register_client(self, client_info: OAuthClientInformationFull):
@@ -145,7 +145,7 @@ class MockOAuthProvider(OAuthServerProvider):
         self,
         client: OAuthClientInformationFull,
         refresh_token: RefreshToken,
-        scopes: List[str],
+        scopes: list[str],
     ) -> OAuthToken:
         # Check if refresh token exists
         assert refresh_token.token in self.refresh_tokens
