@@ -5,7 +5,11 @@ from functools import partial
 from urllib.parse import urlparse
 
 import anyio
+import httpx
+from pydantic import AnyHttpUrl
 
+from mcp.client.auth.httpx import McpOAuth
+from mcp.client.auth.oauth import InMemoryOAuthStore, OAuthClient
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 from mcp.client.stdio import StdioServerParameters, stdio_client
@@ -46,8 +50,15 @@ async def main(command_or_url: str, args: list[str], env: list[tuple[str, str]])
 
     if urlparse(command_or_url).scheme in ("http", "https"):
         # Use SSE client for HTTP(S) URLs
-        async with sse_client(command_or_url) as streams:
-            await run_session(*streams)
+        oauth_client = OAuthClient(
+            client_name="mcp-client",
+            server_url=AnyHttpUrl(command_or_url),
+            redirect_url=AnyHttpUrl("http://localhost:5999/auth"),
+            provider=InMemoryOAuthStore(),
+        )
+        async with httpx.AsyncClient(auth=McpOAuth(oauth_client)) as http:
+            async with sse_client(http, command_or_url) as streams:
+                await run_session(*streams)
     else:
         # Use stdio client for commands
         server_parameters = StdioServerParameters(

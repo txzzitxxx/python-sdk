@@ -43,11 +43,10 @@ mcp = "mcp.cli:app [cli]"
 [tool.uv]
 resolution = "lowest-direct"
 dev-dependencies = [
-    "pyright>=1.1.391",
+    "pyright>=1.1.396",
     "pytest>=8.3.4",
     "ruff>=0.8.5",
     "trio>=0.26.2",
-    "pytest-flakefinder>=1.1.0",
     "pytest-xdist>=3.6.1",
 ]
 

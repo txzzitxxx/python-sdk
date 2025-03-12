@@ -1,6 +1,5 @@
 import logging
 from contextlib import asynccontextmanager
-from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import anyio
@@ -20,8 +19,8 @@ def remove_request_params(url: str) -> str:
 
 @asynccontextmanager
 async def sse_client(
+    client: httpx.AsyncClient,
     url: str,
-    headers: dict[str, Any] | None = None,
     timeout: float = 5,
     sse_read_timeout: float = 60 * 5,
 ):
@@ -43,7 +42,7 @@ async def sse_client(
     async with anyio.create_task_group() as tg:
         try:
             logger.info(f"Connecting to SSE endpoint: {remove_request_params(url)}")
-            async with httpx.AsyncClient(headers=headers) as client:
+            async with client:
                 async with aconnect_sse(
                     client,
                     "GET",
