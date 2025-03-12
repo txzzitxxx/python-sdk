@@ -6,11 +6,13 @@ with an MCP server. It implements the authentication flow as specified in the MC
 authorization specification.
 """
 
+import base64
+import hashlib
 import json
 import logging
 from datetime import datetime, timedelta
 from typing import Any, Protocol
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
@@ -373,7 +375,49 @@ class OAuthClientProvider(Protocol):
     @property
     def client_metadata(self) -> ClientMetadata: ...
 
-    def save_client_information(self, metadata: DynamicClientRegistration) -> None: ...
+    @property
+    def redirect_url(self) -> AnyHttpUrl: ...
+
+    async def open_user_agent(self, url: AnyHttpUrl) -> None:
+        """
+        Opens the user agent to the given URL.
+        """
+        ...
+
+    async def client_registration(
+        self, endpoint: AnyHttpUrl
+    ) -> DynamicClientRegistration | None:
+        """
+        Loads the client registration for the given endpoint.
+        """
+        ...
+
+    async def store_client_registration(
+        self, endpoint: AnyHttpUrl, metadata: DynamicClientRegistration
+    ) -> None:
+        """
+        Stores the client registration to be retreived for the next session
+        """
+        ...
+
+    def code_verifier(self) -> str:
+        """
+        Loads the PKCE code verifier for the current session.
+        See https://www.rfc-editor.org/rfc/rfc7636.html#section-4.1
+        """
+        ...
+
+    async def token(self) -> AccessToken | None:
+        """
+        Loads the token for the current session.
+        """
+        ...
+
+    async def store_token(self, token: AccessToken) -> None:
+        """
+        Stores the token to be retreived for the next session
+        """
+        ...
 
 
 class NotFoundError(Exception):
@@ -388,29 +432,64 @@ class RegistrationFailedError(Exception):
     pass
 
 
+class GrantNotSupported(Exception):
+    """Exception raised when a grant type is not supported."""
+
+    pass
+
+
 class OAuthClient:
     WELL_KNOWN = "/.well-known/oauth-authorization-server"
+    GRANT_TYPE: str = "authorization_code"
 
-    def __init__(self, server_url: AnyHttpUrl, provider: OAuthClientProvider):
+    def __init__(
+        self,
+        server_url: AnyHttpUrl,
+        provider: OAuthClientProvider,
+        scope: str | None = None,
+    ):
         self.server_url = server_url
         self.http_client = httpx.AsyncClient()
         self.provider = provider
-        self._registration: DynamicClientRegistration | None = None
+        self.scope = scope
 
-    async def auth(self):
-        metadata = await self.discover_auth_metadata() or self._default_metadata()
+    @property
+    def discovery_url(self) -> AnyHttpUrl:
+        base_url = str(self.server_url).rstrip("/")
+        parsed_url = urlparse(base_url)
+        # HTTPS is required by RFC 8414
+        discovery_url = f"https://{parsed_url.netloc}{self.WELL_KNOWN}"
+        return AnyHttpUrl(discovery_url)
+
+    async def _obtain_client(
+        self, metadata: ServerMetadataDiscovery
+    ) -> DynamicClientRegistration:
+        """
+        Obtain a client by either reading it from the OAuthProvider or registering it.
+        """
         if metadata.registration_endpoint is None:
             raise NotFoundError("Registration endpoint not found")
-        self._registration = await self.dynamic_client_registration(
-            self.provider.client_metadata, metadata.registration_endpoint
-        )
-        if self._registration is None:
-            raise RegistrationFailedError(
-                f"Registration at {metadata.registration_endpoint} failed"
-            )
-        self.provider.save_client_information(self._registration)
 
-    def _default_metadata(self) -> ServerMetadataDiscovery:
+        if registration := await self.provider.client_registration(metadata.issuer):
+            return registration
+        else:
+            registration = await self.dynamic_client_registration(
+                self.provider.client_metadata, metadata.registration_endpoint
+            )
+            if registration is None:
+                raise RegistrationFailedError(
+                    f"Registration at {metadata.registration_endpoint} failed"
+                )
+
+            await self.provider.store_client_registration(metadata.issuer, registration)
+            return registration
+
+    def default_metadata(self) -> ServerMetadataDiscovery:
+        """
+        Returns default endpoints as specified in
+        https://spec.modelcontextprotocol.io/specification/draft/basic/authorization/
+        for the server.
+        """
         base_url = AnyHttpUrl(str(self.server_url).rstrip("/"))
         return ServerMetadataDiscovery(
             issuer=base_url,
@@ -423,10 +502,11 @@ class OAuthClient:
         )
 
     async def discover_auth_metadata(self) -> ServerMetadataDiscovery | None:
-        discovery_url = self._build_discovery_url()
-
+        """
+        Use RFC 8414 to discover the authorization server metadata.
+        """
         try:
-            response = await self.http_client.get(str(discovery_url))
+            response = await self.http_client.get(str(self.discovery_url))
             if response.status_code == 404:
                 return None
             response.raise_for_status()
@@ -439,31 +519,12 @@ class OAuthClient:
             logger.error(f"Error during auth metadata discovery: {e}")
             raise
 
-    def _build_discovery_url(self) -> AnyHttpUrl:
-        base_url = str(self.server_url).rstrip("/")
-        parsed_url = urlparse(base_url)
-        # HTTPS is required by RFC 8414
-        discovery_url = f"https://{parsed_url.netloc}{self.WELL_KNOWN}"
-        return AnyHttpUrl(discovery_url)
-
     async def dynamic_client_registration(
         self, client_metadata: ClientMetadata, registration_endpoint: AnyHttpUrl
     ) -> DynamicClientRegistration | None:
         """
         Register a client dynamically with an OAuth 2.0 authorization server
         following RFC 7591.
-
-        Args:
-            client_metadata: Typed client registration metadata
-            registration_endpoint: Where to register clients.
-                              If None, will use discovery
-
-        Returns:
-            DynamicClientRegistrationResponse if successful, None otherwise
-
-        Raises:
-            httpx.HTTPStatusError: If the server returns an error status code
-            Exception: For other errors during registration
         """
         headers = {"Content-Type": "application/json", "Accept": "application/json"}
 
@@ -493,3 +554,145 @@ class OAuthClient:
             logger.error(f"Unexpected error during registration: {e}")
 
         return None
+
+    async def exchange_authorization(
+        self,
+        metadata: ServerMetadataDiscovery,
+        registration: DynamicClientRegistration,
+        code_verifier: str,
+        authorization_code: str,
+    ) -> AccessToken:
+        """Exchange an authorization code for an access token using OAuth 2.1 with PKCE.
+
+        Args:
+            registration: The client registration information
+            code_verifier: The PKCE code verifier used to generate the code challenge
+            authorization_code: The authorization code received from the authorization
+                server
+
+        Returns:
+            AccessToken: The resulting access token
+
+        Raises:
+            GrantNotSupported: If the grant type is not supported
+            httpx.HTTPStatusError: If the token endpoint request fails
+        """
+        if self.GRANT_TYPE not in (registration.grant_types or []):
+            raise GrantNotSupported(f"Grant type {self.GRANT_TYPE} not supported")
+
+        code_verifier = self.provider.code_verifier()
+        # Get token endpoint from server metadata or use default
+        token_endpoint = str(metadata.token_endpoint)
+
+        # Prepare token request parameters
+        data = {
+            "grant_type": self.GRANT_TYPE,
+            "code": authorization_code,
+            "redirect_uri": str(self.provider.redirect_url),
+            "client_id": registration.client_id,
+            "code_verifier": code_verifier,
+        }
+
+        # Add client secret if available (optional in OAuth 2.1)
+        if registration.client_secret:
+            data["client_secret"] = registration.client_secret
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        }
+
+        try:
+            response = await self.http_client.post(
+                token_endpoint, data=data, headers=headers
+            )
+            response.raise_for_status()
+            token_data = response.json()
+
+            # Create and return the token
+            return AccessToken(**token_data)
+
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error during token exchange: {e.response.status_code}")
+            if e.response.content:
+                try:
+                    error_data = json.loads(e.response.content)
+                    logger.error(f"Error details: {error_data}")
+                except json.JSONDecodeError:
+                    logger.error(f"Error content: {e.response.content}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during token exchange: {e}")
+            raise
+
+    async def auth(self, authorization_code: str, code_verifier: str) -> AccessToken:
+        """
+        Complete the OAuth 2.1 authorization flow by exchanging authorization code
+        for tokens.
+
+        Args:
+            authorization_code: The authorization code received from the authorization
+                server
+            code_verifier: The PKCE code verifier used to generate the code challenge
+
+        Returns:
+            AccessToken: The resulting access token
+        """
+        metadata = await self.discover_auth_metadata() or self.default_metadata()
+        registration = await self._obtain_client(metadata)
+
+        code_verifier = self.provider.code_verifier()
+
+        authorization_url = self.get_authorization_url(
+            metadata.authorization_endpoint,
+            self.provider.redirect_url,
+            registration.client_id,
+            code_verifier,
+            self.scope,
+        )
+
+        await self.provider.open_user_agent(AnyHttpUrl(authorization_url))
+
+        return await self.exchange_authorization(
+            metadata, registration, code_verifier, authorization_code
+        )
+
+    def get_authorization_url(
+        self,
+        authorization_endpoint: AnyHttpUrl,
+        redirect_uri: AnyHttpUrl,
+        client_id: str,
+        code_verifier: str,
+        scope: str | None = None,
+    ) -> AnyHttpUrl:
+        """Generate an OAuth 2.1 authorization URL for the user agent.
+
+        This method generates a URL that the user agent (browser) should visit to
+        authenticate the user and authorize the application. It includes PKCE
+        (Proof Key for Code Exchange) for enhanced security as required by OAuth 2.1.
+        """
+        # Create a custom verifier for this authorization request
+        code_verifier = self.provider.code_verifier()
+
+        # Generate code challenge from verifier using SHA-256
+        code_challenge = (
+            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+            .decode()
+            .rstrip("=")
+        )
+
+        # Build authorization URL with necessary parameters
+        params = {
+            "response_type": "code",
+            "client_id": client_id,
+            "redirect_uri": str(redirect_uri),
+            "code_challenge": code_challenge,
+            "code_challenge_method": "S256",
+        }
+
+        # Add scope if provided or use the one from registration
+        if scope:
+            params["scope"] = scope
+
+        # Construct the full authorization URL
+        return AnyHttpUrl(f"{authorization_endpoint}?{urlencode(params)}")
