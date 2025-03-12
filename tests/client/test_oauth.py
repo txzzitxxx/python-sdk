@@ -6,6 +6,7 @@ import pytest
 from pydantic import AnyHttpUrl
 
 from mcp.client.auth.oauth import (
+    AccessToken,
     ClientMetadata,
     DynamicClientRegistration,
     OAuthClient,
@@ -24,7 +25,30 @@ class MockOauthClientProvider(OAuthClientProvider):
             response_types=["code"],
         )
 
-    def save_client_information(self, metadata: DynamicClientRegistration) -> None:
+    @property
+    def redirect_url(self) -> AnyHttpUrl:
+        return AnyHttpUrl("https://client.example.com/callback")
+
+    async def open_user_agent(self, url: AnyHttpUrl) -> None:
+        pass
+
+    async def client_registration(
+        self, issuer: AnyHttpUrl
+    ) -> DynamicClientRegistration | None:
+        return None
+
+    async def store_client_registration(
+        self, issuer: AnyHttpUrl, metadata: DynamicClientRegistration
+    ) -> None:
+        pass
+
+    def code_verifier(self) -> str:
+        return "test-code-verifier"
+
+    async def token(self) -> AccessToken | None:
+        return None
+
+    async def store_token(self, token: AccessToken) -> None:
         pass
 
 
@@ -229,8 +253,5 @@ def test_build_discovery_url_with_various_formats(input_url, expected_discovery_
     # Create auth client with the given URL
     auth_client = OAuthClient(AnyHttpUrl(input_url), MockOauthClientProvider())
 
-    # Call the method under test
-    discovery_url = auth_client._build_discovery_url()
-
     # Assertions
-    assert discovery_url == AnyHttpUrl(expected_discovery_url)
+    assert auth_client.discovery_url == AnyHttpUrl(expected_discovery_url)

@@ -385,7 +385,7 @@ class OAuthClientProvider(Protocol):
         ...
 
     async def client_registration(
-        self, endpoint: AnyHttpUrl
+        self, issuer: AnyHttpUrl
     ) -> DynamicClientRegistration | None:
         """
         Loads the client registration for the given endpoint.
@@ -393,7 +393,7 @@ class OAuthClientProvider(Protocol):
         ...
 
     async def store_client_registration(
-        self, endpoint: AnyHttpUrl, metadata: DynamicClientRegistration
+        self, issuer: AnyHttpUrl, metadata: DynamicClientRegistration
     ) -> None:
         """
         Stores the client registration to be retreived for the next session
