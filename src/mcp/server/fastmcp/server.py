@@ -16,7 +16,7 @@ from typing import Any, Callable, Generic, Literal, Sequence
 import anyio
 import pydantic_core
 import uvicorn
-from pydantic import BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field
 from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sse_starlette import EventSourceResponse
@@ -99,9 +99,13 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
         Callable[["FastMCP"], AbstractAsyncContextManager[LifespanResultT]] | None
     ) = Field(None, description="Lifespan context manager")
 
-    auth_issuer_url: AnyUrl | None = Field(None, description="Auth issuer URL")
-    auth_service_documentation_url: AnyUrl | None = Field(
-        None, description="Service documentation URL"
+    auth_issuer_url: AnyHttpUrl | None = Field(
+        None,
+        description="URL advertised as OAuth issuer; this should be the URL the server "
+        "is reachable at",
+    )
+    auth_service_documentation_url: AnyHttpUrl | None = Field(
+        None, description="Service documentation URL advertised by OAuth"
     )
     auth_client_registration_options: ClientRegistrationOptions | None = None
     auth_revocation_options: RevocationOptions | None = None

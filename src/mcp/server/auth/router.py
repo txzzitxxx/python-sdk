@@ -1,6 +1,7 @@
 from dataclasses import dataclass
+from typing import Callable
 
-from pydantic import AnyUrl
+from pydantic import AnyHttpUrl
 from starlette.routing import Route, Router
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
@@ -24,7 +25,7 @@ class RevocationOptions:
     enabled: bool = False
 
 
-def validate_issuer_url(url: AnyUrl):
+def validate_issuer_url(url: AnyHttpUrl):
     """
     Validate that the issuer URL meets OAuth 2.0 requirements.
 
@@ -58,8 +59,8 @@ REVOCATION_PATH = "/revoke"
 
 def create_auth_router(
     provider: OAuthServerProvider,
-    issuer_url: AnyUrl,
-    service_documentation_url: AnyUrl | None = None,
+    issuer_url: AnyHttpUrl,
+    service_documentation_url: AnyHttpUrl | None = None,
     client_registration_options: ClientRegistrationOptions | None = None,
     revocation_options: RevocationOptions | None = None,
 ) -> Router:
@@ -134,34 +135,61 @@ def create_auth_router(
     return auth_router
 
 
+def modify_url_path(url: AnyHttpUrl, path_mapper: Callable[[str], str]) -> AnyHttpUrl:
+    return AnyHttpUrl.build(
+        scheme=url.scheme,
+        username=url.username,
+        password=url.password,
+        host=url.host,
+        port=url.port,
+        path=path_mapper(url.path or ""),
+        query=url.query,
+        fragment=url.fragment,
+    )
+
+
 def build_metadata(
-    issuer_url: AnyUrl,
-    service_documentation_url: AnyUrl | None,
+    issuer_url: AnyHttpUrl,
+    service_documentation_url: AnyHttpUrl | None,
     client_registration_options: ClientRegistrationOptions,
     revocation_options: RevocationOptions,
 ) -> OAuthMetadata:
-    issuer_url_str = str(issuer_url).rstrip("/")
+    authorization_url = modify_url_path(
+        issuer_url, lambda path: path.rstrip("/") + AUTHORIZATION_PATH.lstrip("/")
+    )
+    token_url = modify_url_path(
+        issuer_url, lambda path: path.rstrip("/") + TOKEN_PATH.lstrip("/")
+    )
     # Create metadata
     metadata = OAuthMetadata(
-        issuer=issuer_url_str,
-        service_documentation=str(service_documentation_url).rstrip("/")
-        if service_documentation_url
-        else None,
-        authorization_endpoint=f"{issuer_url_str}{AUTHORIZATION_PATH}",
+        issuer=issuer_url,
+        authorization_endpoint=authorization_url,
+        token_endpoint=token_url,
+        scopes_supported=None,
         response_types_supported=["code"],
-        code_challenge_methods_supported=["S256"],
-        token_endpoint=f"{issuer_url_str}{TOKEN_PATH}",
-        token_endpoint_auth_methods_supported=["client_secret_post"],
+        response_modes_supported=None,
         grant_types_supported=["authorization_code", "refresh_token"],
+        token_endpoint_auth_methods_supported=["client_secret_post"],
+        token_endpoint_auth_signing_alg_values_supported=None,
+        service_documentation=service_documentation_url,
+        ui_locales_supported=None,
+        op_policy_uri=None,
+        op_tos_uri=None,
+        introspection_endpoint=None,
+        code_challenge_methods_supported=["S256"],
     )
 
     # Add registration endpoint if supported
     if client_registration_options.enabled:
-        metadata.registration_endpoint = f"{issuer_url_str}{REGISTRATION_PATH}"
+        metadata.registration_endpoint = modify_url_path(
+            issuer_url, lambda path: path.rstrip("/") + REGISTRATION_PATH.lstrip("/")
+        )
 
     # Add revocation endpoint if supported
     if revocation_options.enabled:
-        metadata.revocation_endpoint = f"{issuer_url_str}{REVOCATION_PATH}"
+        metadata.revocation_endpoint = modify_url_path(
+            issuer_url, lambda path: path.rstrip("/") + REVOCATION_PATH.lstrip("/")
+        )
         metadata.revocation_endpoint_auth_methods_supported = ["client_secret_post"]
 
     return metadata

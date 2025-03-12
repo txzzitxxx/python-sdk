@@ -15,7 +15,7 @@ import anyio
 import httpx
 import pytest
 from httpx_sse import aconnect_sse
-from pydantic import AnyUrl
+from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
 from starlette.routing import Mount
 
@@ -229,8 +229,8 @@ def auth_app(mock_oauth_provider):
     # Create auth router
     auth_router = create_auth_router(
         mock_oauth_provider,
-        AnyUrl("https://auth.example.com"),
-        AnyUrl("https://docs.example.com"),
+        AnyHttpUrl("https://auth.example.com"),
+        AnyHttpUrl("https://docs.example.com"),
         client_registration_options=ClientRegistrationOptions(enabled=True),
         revocation_options=RevocationOptions(enabled=True),
     )
@@ -373,7 +373,7 @@ class TestAuthEndpoints:
         assert response.status_code == 200
 
         metadata = response.json()
-        assert metadata["issuer"] == "https://auth.example.com"
+        assert metadata["issuer"] == "https://auth.example.com/"
         assert (
             metadata["authorization_endpoint"] == "https://auth.example.com/authorize"
         )
@@ -389,7 +389,7 @@ class TestAuthEndpoints:
             "authorization_code",
             "refresh_token",
         ]
-        assert metadata["service_documentation"] == "https://docs.example.com"
+        assert metadata["service_documentation"] == "https://docs.example.com/"
 
     @pytest.mark.anyio
     async def test_token_validation_error(self, test_client: httpx.AsyncClient):
