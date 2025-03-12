@@ -7,11 +7,11 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from mcp.server.auth.errors import (
-    InvalidClientError,
     stringify_pydantic_error,
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.middleware.client_auth import (
+    AuthenticationError,
     ClientAuthenticator,
 )
 from mcp.server.auth.provider import AuthInfo, OAuthServerProvider, RefreshToken
@@ -29,7 +29,7 @@ class RevocationRequest(BaseModel):
 
 
 class RevocationErrorResponse(BaseModel):
-    error: Literal["invalid_request",]
+    error: Literal["invalid_request", "unauthorized_client"]
     error_description: str | None = None
 
 
@@ -59,8 +59,14 @@ class RevocationHandler:
             client = await self.client_authenticator.authenticate(
                 revocation_request.client_id, revocation_request.client_secret
             )
-        except InvalidClientError as e:
-            return PydanticJSONResponse(status_code=401, content=e.error_response())
+        except AuthenticationError as e:
+            return PydanticJSONResponse(
+                status_code=401,
+                content=RevocationErrorResponse(
+                    error="unauthorized_client",
+                    error_description=e.message,
+                ),
+            )
 
         loaders = [
             self.provider.load_access_token,

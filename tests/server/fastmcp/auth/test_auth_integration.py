@@ -198,7 +198,7 @@ class MockOAuthProvider(OAuthServerProvider):
             expires_at=token_info.expires_at,
         )
 
-    async def revoke_token(self, token: OAuthToken | RefreshToken) -> None:
+    async def revoke_token(self, token: AuthInfo | RefreshToken) -> None:
         match token:
             case RefreshToken():
                 # Remove the refresh token

@@ -9,11 +9,11 @@ from starlette.requests import Request
 
 from mcp.server.auth.errors import (
     ErrorResponse,
-    InvalidClientError,
     stringify_pydantic_error,
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.middleware.client_auth import (
+    AuthenticationError,
     ClientAuthenticator,
 )
 from mcp.server.auth.provider import OAuthServerProvider
@@ -111,8 +111,13 @@ class TokenHandler:
                 client_id=token_request.client_id,
                 client_secret=token_request.client_secret,
             )
-        except InvalidClientError as e:
-            return self.response(e.error_response())
+        except AuthenticationError as e:
+            return self.response(
+                TokenErrorResponse(
+                    error="unauthorized_client",
+                    error_description=e.message,
+                )
+            )
 
         if token_request.grant_type not in client_info.grant_types:
             return self.response(

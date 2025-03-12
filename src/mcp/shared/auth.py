@@ -15,6 +15,16 @@ class OAuthToken(BaseModel):
     refresh_token: str | None = None
 
 
+class InvalidScopeError(Exception):
+    def __init__(self, message: str):
+        self.message = message
+
+
+class InvalidRedirectUriError(Exception):
+    def __init__(self, message: str):
+        self.message = message
+
+
 class OAuthClientMetadata(BaseModel):
     """
     RFC 7591 OAuth 2.0 Dynamic Client Registration metadata.
@@ -49,6 +59,32 @@ class OAuthClientMetadata(BaseModel):
     jwks: Any | None = None
     software_id: str | None = None
     software_version: str | None = None
+
+    def validate_scope(self, requested_scope: str | None) -> list[str] | None:
+        if requested_scope is None:
+            return None
+        requested_scopes = requested_scope.split(" ")
+        allowed_scopes = [] if self.scope is None else self.scope.split(" ")
+        for scope in requested_scopes:
+            if scope not in allowed_scopes:
+                raise InvalidScopeError(f"Client was not registered with scope {scope}")
+        return requested_scopes
+
+    def validate_redirect_uri(self, redirect_uri: AnyHttpUrl | None) -> AnyHttpUrl:
+        if redirect_uri is not None:
+            # Validate redirect_uri against client's registered redirect URIs
+            if redirect_uri not in self.redirect_uris:
+                raise InvalidRedirectUriError(
+                    f"Redirect URI '{redirect_uri}' not registered for client"
+                )
+            return redirect_uri
+        elif len(self.redirect_uris) == 1:
+            return self.redirect_uris[0]
+        else:
+            raise InvalidRedirectUriError(
+                "redirect_uri must be specified when client "
+                "has multiple registered URIs"
+            )
 
 
 class OAuthClientInformationFull(OAuthClientMetadata):

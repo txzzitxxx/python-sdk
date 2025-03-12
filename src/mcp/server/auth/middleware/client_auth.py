@@ -1,8 +1,12 @@
 import time
 
-from mcp.server.auth.errors import InvalidClientError
 from mcp.server.auth.provider import OAuthRegisteredClientsStore
 from mcp.shared.auth import OAuthClientInformationFull
+
+
+class AuthenticationError(Exception):
+    def __init__(self, message: str):
+        self.message = message
 
 
 class ClientAuthenticator:
@@ -31,21 +35,21 @@ class ClientAuthenticator:
         # Look up client information
         client = await self.clients_store.get_client(client_id)
         if not client:
-            raise InvalidClientError("Invalid client_id")
+            raise AuthenticationError("Invalid client_id")
 
         # If client from the store expects a secret, validate that the request provides
         # that secret
         if client.client_secret:
             if not client_secret:
-                raise InvalidClientError("Client secret is required")
+                raise AuthenticationError("Client secret is required")
 
             if client.client_secret != client_secret:
-                raise InvalidClientError("Invalid client_secret")
+                raise AuthenticationError("Invalid client_secret")
 
             if (
                 client.client_secret_expires_at
                 and client.client_secret_expires_at < int(time.time())
             ):
-                raise InvalidClientError("Client secret has expired")
+                raise AuthenticationError("Client secret has expired")
 
         return client

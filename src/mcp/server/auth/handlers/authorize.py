@@ -9,7 +9,6 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 
 from mcp.server.auth.errors import (
-    InvalidRequestError,
     OAuthError,
     stringify_pydantic_error,
 )
@@ -19,7 +18,10 @@ from mcp.server.auth.provider import (
     OAuthServerProvider,
     construct_redirect_uri,
 )
-from mcp.shared.auth import OAuthClientInformationFull
+from mcp.shared.auth import (
+    InvalidRedirectUriError,
+    InvalidScopeError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,37 +66,6 @@ class AuthorizationErrorResponse(BaseModel):
     error_uri: AnyUrl | None = None
     # must be set if provided in the request
     state: str | None = None
-
-
-def validate_scope(
-    requested_scope: str | None, client: OAuthClientInformationFull
-) -> list[str] | None:
-    if requested_scope is None:
-        return None
-    requested_scopes = requested_scope.split(" ")
-    allowed_scopes = [] if client.scope is None else client.scope.split(" ")
-    for scope in requested_scopes:
-        if scope not in allowed_scopes:
-            raise InvalidRequestError(f"Client was not registered with scope {scope}")
-    return requested_scopes
-
-
-def validate_redirect_uri(
-    redirect_uri: AnyHttpUrl | None, client: OAuthClientInformationFull
-) -> AnyHttpUrl:
-    if redirect_uri is not None:
-        # Validate redirect_uri against client's registered redirect URIs
-        if redirect_uri not in client.redirect_uris:
-            raise InvalidRequestError(
-                f"Redirect URI '{redirect_uri}' not registered for client"
-            )
-        return redirect_uri
-    elif len(client.redirect_uris) == 1:
-        return client.redirect_uris[0]
-    else:
-        raise InvalidRequestError(
-            "redirect_uri must be specified when client has multiple registered URIs"
-        )
 
 
 def best_effort_extract_string(
@@ -146,8 +117,8 @@ class AuthorizationHandler:
                         best_effort_extract_string("redirect_uri", params)
                     ).root
                 try:
-                    redirect_uri = validate_redirect_uri(raw_redirect_uri, client)
-                except (ValidationError, InvalidRequestError):
+                    redirect_uri = client.validate_redirect_uri(raw_redirect_uri)
+                except (ValidationError, InvalidRedirectUriError):
                     pass
             if state is None:
                 # make last-ditch effort to load state
@@ -213,22 +184,22 @@ class AuthorizationHandler:
 
             # Validate redirect_uri against client's registered URIs
             try:
-                redirect_uri = validate_redirect_uri(auth_request.redirect_uri, client)
-            except InvalidRequestError as validation_error:
+                redirect_uri = client.validate_redirect_uri(auth_request.redirect_uri)
+            except InvalidRedirectUriError as validation_error:
                 # For redirect_uri validation errors, return direct error (no redirect)
                 return await error_response(
                     error="invalid_request",
-                    error_description=validation_error.error_description,
+                    error_description=validation_error.message,
                 )
 
             # Validate scope - for scope errors, we can redirect
             try:
-                scopes = validate_scope(auth_request.scope, client)
-            except InvalidRequestError as validation_error:
+                scopes = client.validate_scope(auth_request.scope)
+            except InvalidScopeError as validation_error:
                 # For scope errors, redirect with error parameters
                 return await error_response(
                     error="invalid_scope",
-                    error_description=validation_error.error_description,
+                    error_description=validation_error.message,
                 )
 
             # Setup authorization parameters

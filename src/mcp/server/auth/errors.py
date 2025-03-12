@@ -28,22 +28,6 @@ class OAuthError(Exception):
         )
 
 
-class InvalidRequestError(OAuthError):
-    """
-    Invalid request error.
-    """
-
-    error_code = "invalid_request"
-
-
-class InvalidClientError(OAuthError):
-    """
-    Invalid client error.
-    """
-
-    error_code = "invalid_client"
-
-
 def stringify_pydantic_error(validation_error: ValidationError) -> str:
     return "\n".join(
         f"{'.'.join(str(loc) for loc in e['loc'])}: {e['msg']}"
