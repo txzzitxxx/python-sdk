@@ -6,16 +6,19 @@ with an MCP server. It implements the authentication flow as specified in the MC
 authorization specification.
 """
 
+from __future__ import annotations as _annotations
+
 import base64
 import hashlib
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Protocol
 from urllib.parse import urlencode, urlparse
 
 import httpx
-from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
+from pydantic import AnyHttpUrl, AnyUrl, BaseModel, ConfigDict, Field
 
 logger = logging.getLogger(__name__)
 
@@ -53,20 +56,6 @@ class AccessToken(BaseModel):
         """Convert token to Authorization header."""
 
         return {"Authorization": f"{self.token_type} {self.access_token}"}
-
-
-class AuthConfig(BaseModel):
-    """
-    Configuration for the MCP client authentication.
-    """
-
-    client_id: str
-    client_secret: str | None = None
-    token_endpoint: str | None = None
-    redirect_uri: str | None = None
-    scope: str | None = None
-    auth_endpoint: str | None = None
-    model_config = ConfigDict(extra="allow")
 
 
 class ClientMetadata(BaseModel):
@@ -148,229 +137,6 @@ class ServerMetadataDiscovery(BaseModel):
     model_config = ConfigDict(extra="allow")
 
 
-class TokenManager:
-    """
-    Manages OAuth tokens for MCP client, handling token refresh and expiration.
-    """
-
-    def __init__(self, config: AuthConfig):
-        self.config = config
-        self.token: AccessToken | None = None
-
-    @property
-    def is_authenticated(self) -> bool:
-        """Check if the client is authenticated with a valid token."""
-        return self.token is not None and not self.token.is_expired
-
-    async def refresh_token_if_needed(self) -> bool:
-        """
-        Refresh the token if it's expired or close to expiration.
-
-        Returns:
-            bool: True if token was refreshed, False otherwise
-        """
-        if not self.token or not self.token.refresh_token:
-            return False
-
-        if self.token.is_expired():
-            await self.refresh()
-            return True
-
-        return False
-
-    async def refresh(self) -> AccessToken | None:
-        """
-        Refresh the access token using the refresh token.
-
-        Returns:
-            AccessToken | None: The new token if successful, None otherwise
-        """
-        if (
-            not self.token
-            or not self.token.refresh_token
-            or not self.config.token_endpoint
-        ):
-            return None
-
-        data = {
-            "grant_type": "refresh_token",
-            "refresh_token": self.token.refresh_token,
-            "client_id": self.config.client_id,
-        }
-
-        # Add client secret if available
-        if self.config.client_secret:
-            data["client_secret"] = self.config.client_secret
-
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-        }
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.config.token_endpoint,
-                    data=data,
-                    headers=headers,
-                )
-                response.raise_for_status()
-                token_data = response.json()
-
-                # Create and store the token
-                token = AccessToken(**token_data)
-
-                # If the response didn't include a refresh token, keep the old one
-                if not token.refresh_token and self._token.refresh_token:
-                    token.refresh_token = self._token.refresh_token
-
-                self._token = token
-                return token
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error during token refresh: {e.response.status_code}")
-            if e.response.content:
-                try:
-                    error_data = json.loads(e.response.content)
-                    logger.error(f"Error details: {error_data}")
-                except json.JSONDecodeError:
-                    logger.error(f"Error content: {e.response.content}")
-            return None
-
-        except httpx.RequestError as e:
-            logger.error(f"Request error during token refresh: {e}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Unexpected error during token refresh: {e}")
-            return None
-
-    async def authenticate_with_client_credentials(self) -> AccessToken | None:
-        """
-        Authenticate using client credentials flow.
-
-        Returns:
-            AccessToken | None: The access token if successful, None otherwise
-        """
-        if not self.config.token_endpoint or not self.config.client_id:
-            logger.error("Token endpoint or client ID not configured")
-            return None
-
-        data = {
-            "grant_type": "client_credentials",
-            "client_id": self.config.client_id,
-        }
-
-        # Add client secret if available
-        if self.config.client_secret:
-            data["client_secret"] = self.config.client_secret
-
-        # Add scope if available
-        if self.config.scope:
-            data["scope"] = self.config.scope
-
-        headers = {
-            "Content-Type": "application/x-www-form-urlencoded",
-            "Accept": "application/json",
-        }
-
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.config.token_endpoint,
-                    data=data,
-                    headers=headers,
-                )
-                response.raise_for_status()
-                token_data = response.json()
-
-                # Create and store the token
-                token = AccessToken(**token_data)
-                self._token = token
-                return token
-
-        except httpx.HTTPStatusError as e:
-            logger.error(f"HTTP error during authentication: {e.response.status_code}")
-            if e.response.content:
-                try:
-                    error_data = json.loads(e.response.content)
-                    logger.error(f"Error details: {error_data}")
-                except json.JSONDecodeError:
-                    logger.error(f"Error content: {e.response.content}")
-            return None
-
-        except httpx.RequestError as e:
-            logger.error(f"Request error during authentication: {e}")
-            return None
-
-        except Exception as e:
-            logger.error(f"Unexpected error during authentication: {e}")
-            return None
-
-
-class AuthSession:
-    """
-    Client for handling authentication with an MCP server.
-
-    This client provides methods for authenticating with an MCP server using
-    various OAuth 2.0 flows and managing the resulting tokens.
-    """
-
-    def __init__(self, config: AuthConfig):
-        """
-        Initialize the authentication client with the given configuration.
-
-        Args:
-            config: Authentication configuration
-        """
-        self.config = config
-        self.token_manager: TokenManager = TokenManager(config)
-
-    async def initialize(self) -> None:
-        """
-        Initialize the client and prepare it for authentication.
-        """
-        if self.token_manager is None:
-            self.token_manager = TokenManager(self.config)
-
-    async def authenticate_with_client_credentials(self) -> AccessToken | None:
-        """
-        Authenticate using the client credentials flow.
-
-        This flow is typically used for machine-to-machine authentication
-        where the client is acting on its own behalf, not on behalf of a user.
-
-        Returns:
-            AccessToken | None: The access token if successful, None otherwise
-        """
-        await self.initialize()
-        return await self.token_manager.authenticate_with_client_credentials()
-
-    async def get_auth_headers(self) -> dict[str, str]:
-        """
-        Get the authentication headers for API requests.
-
-        This method will refresh the token if needed before returning headers.
-
-        Returns:
-            dict[str, str]: Authentication headers
-        """
-        await self.initialize()
-        await self.token_manager.refresh_token_if_needed()
-
-        if not self.token_manager.token:
-            return {}
-
-        return self.token_manager.token.to_auth_header()
-
-    @property
-    def is_authenticated(self) -> bool:
-        """Check if the client is authenticated with a valid token."""
-        if self.token_manager is None:
-            return False
-        return self.token_manager.is_authenticated
-
-
 class OAuthClientProvider(Protocol):
     @property
     def client_metadata(self) -> ClientMetadata: ...
@@ -397,6 +163,20 @@ class OAuthClientProvider(Protocol):
     ) -> None:
         """
         Stores the client registration to be retreived for the next session
+        """
+        ...
+
+    async def store_metadata(
+        self, issuer: AnyHttpUrl, metadata: ServerMetadataDiscovery
+    ) -> None:
+        """
+        Stores the metadata for the given issuer
+        """
+        ...
+
+    async def metadata(self, issuer: AnyHttpUrl) -> ServerMetadataDiscovery | None:
+        """
+        Loads the metadata for the given issuer
         """
         ...
 
@@ -442,24 +222,51 @@ class OAuthClient:
     WELL_KNOWN = "/.well-known/oauth-authorization-server"
     GRANT_TYPE: str = "authorization_code"
 
+    @dataclass
+    class State:
+        metadata: ServerMetadataDiscovery | None = None
+        registeration: DynamicClientRegistration | None = None
+
     def __init__(
         self,
         server_url: AnyHttpUrl,
         provider: OAuthClientProvider,
         scope: str | None = None,
     ):
-        self.server_url = server_url
         self.http_client = httpx.AsyncClient()
+        self.server_url = server_url
         self.provider = provider
         self.scope = scope
+        self.state = self.State()
+
+    @property
+    def is_authenticated(self) -> bool:
+        """Check if client has a valid, non-expired token."""
+        return self.token is not None and not self.token.is_expired()
 
     @property
     def discovery_url(self) -> AnyHttpUrl:
         base_url = str(self.server_url).rstrip("/")
         parsed_url = urlparse(base_url)
+
         # HTTPS is required by RFC 8414
         discovery_url = f"https://{parsed_url.netloc}{self.WELL_KNOWN}"
-        return AnyHttpUrl(discovery_url)
+        return AnyUrl(discovery_url)
+
+    async def _obtain_metadata(self) -> ServerMetadataDiscovery:
+        if metadata := await self.provider.metadata(self.discovery_url):
+            return metadata
+        if metadata := await self.discover_auth_metadata(self.discovery_url):
+            await self.provider.store_metadata(self.discovery_url, metadata)
+            return metadata
+        return self.default_metadata()
+
+    async def metadata(self) -> ServerMetadataDiscovery:
+        if self.state.metadata is not None:
+            return self.state.metadata
+
+        self.state.metadata = await self._obtain_metadata()
+        return self.state.metadata
 
     async def _obtain_client(
         self, metadata: ServerMetadataDiscovery
@@ -484,29 +291,39 @@ class OAuthClient:
             await self.provider.store_client_registration(metadata.issuer, registration)
             return registration
 
+    async def client_metadata(
+        self, metadata: ServerMetadataDiscovery
+    ) -> DynamicClientRegistration:
+        if self.state.registeration is not None:
+            return self.state.registeration
+        else:
+            return await self._obtain_client(metadata)
+
     def default_metadata(self) -> ServerMetadataDiscovery:
         """
         Returns default endpoints as specified in
         https://spec.modelcontextprotocol.io/specification/draft/basic/authorization/
         for the server.
         """
-        base_url = AnyHttpUrl(str(self.server_url).rstrip("/"))
+        base_url = AnyUrl(str(self.server_url).rstrip("/"))
         return ServerMetadataDiscovery(
             issuer=base_url,
-            authorization_endpoint=AnyHttpUrl(f"{base_url}/authorize"),
-            token_endpoint=AnyHttpUrl(f"{base_url}/token"),
-            registration_endpoint=AnyHttpUrl(f"{base_url}/register"),
+            authorization_endpoint=AnyUrl(f"{base_url}/authorize"),
+            token_endpoint=AnyUrl(f"{base_url}/token"),
+            registration_endpoint=AnyUrl(f"{base_url}/register"),
             response_types_supported=["code"],
             grant_types_supported=["authorization_code", "refresh_token"],
             token_endpoint_auth_methods_supported=["client_secret_post"],
         )
 
-    async def discover_auth_metadata(self) -> ServerMetadataDiscovery | None:
+    async def discover_auth_metadata(
+        self, discovery_url: AnyHttpUrl
+    ) -> ServerMetadataDiscovery | None:
         """
         Use RFC 8414 to discover the authorization server metadata.
         """
         try:
-            response = await self.http_client.get(str(self.discovery_url))
+            response = await self.http_client.get(str(discovery_url))
             if response.status_code == 404:
                 return None
             response.raise_for_status()
@@ -555,40 +372,148 @@ class OAuthClient:
 
         return None
 
-    async def exchange_authorization(
-        self,
-        metadata: ServerMetadataDiscovery,
-        registration: DynamicClientRegistration,
-        code_verifier: str,
-        authorization_code: str,
-    ) -> AccessToken:
-        """Exchange an authorization code for an access token using OAuth 2.1 with PKCE.
+    async def start_auth(self) -> AnyHttpUrl:
+        """
+        Start the OAuth 2.1 authorization flow by redirecting the user to the
+        authorization server.
+
+        Returns:
+            AnyHttpUrl: The authorization URL to redirect the user to
+        """
+        metadata = await self.metadata()
+        registration = await self.client_metadata(metadata)
+
+        # Generate PKCE code verifier
+        code_verifier = self.provider.code_verifier()
+
+        # Build authorization URL
+        authorization_url = get_authorization_url(
+            metadata.authorization_endpoint,
+            self.provider.redirect_url,
+            registration.client_id,
+            code_verifier,
+            self.scope,
+        )
+
+        # Open the URL in the user's browser
+        await self.provider.open_user_agent(authorization_url)
+
+        return authorization_url
+
+    async def finalize_auth(self, authorization_code: str) -> AccessToken:
+        """
+        Complete the OAuth 2.1 authorization flow by exchanging authorization code
+        for tokens.
 
         Args:
-            registration: The client registration information
-            code_verifier: The PKCE code verifier used to generate the code challenge
             authorization_code: The authorization code received from the authorization
                 server
 
         Returns:
             AccessToken: The resulting access token
-
-        Raises:
-            GrantNotSupported: If the grant type is not supported
-            httpx.HTTPStatusError: If the token endpoint request fails
         """
-        if self.GRANT_TYPE not in (registration.grant_types or []):
-            raise GrantNotSupported(f"Grant type {self.GRANT_TYPE} not supported")
-
+        # Get metadata and registration info
+        metadata = await self.metadata()
+        registration = await self.client_metadata(metadata)
         code_verifier = self.provider.code_verifier()
+
+        # Exchange the code for a token
+        token = await self.exchange_authorization(
+            metadata,
+            registration,
+            self.provider.redirect_url,
+            code_verifier,
+            authorization_code,
+        )
+
+        # Cache the token and store it for future use
+        self.token = token
+        await self.provider.store_token(token)
+
+        return token
+
+    async def refresh_if_needed(self) -> AccessToken | None:
+        """
+        Get the current token from the underlying provider
+        """
+        # Return cached token if it's valid
+        metadata = await self.metadata()
+        registration = await self.client_metadata(metadata)
+
+        if token := await self.provider.token():
+            if not token.is_expired():
+                return token
+
+            token = await self.refresh_token(
+                token,
+                metadata.token_endpoint,
+                registration.client_id,
+                registration.client_secret,
+            )
+
+            if token is not None:
+                return token
+
+        return None
+
+    async def refresh_token(
+        self,
+        token: AccessToken,
+        token_endpoint: AnyHttpUrl,
+        client_id: str,
+        client_secret: str | None = None,
+    ) -> AccessToken:
+        """
+        Refresh the access token using a refresh token.
+        """
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": token.refresh_token,
+            "client_id": client_id,
+        }
+
+        if client_secret:
+            data["client_secret"] = client_secret
+
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        }
+
+        try:
+            response = await self.http_client.post(
+                str(token_endpoint), data=data, headers=headers
+            )
+            response.raise_for_status()
+            token_data = response.json()
+            return AccessToken(**token_data)
+        except Exception as e:
+            logger.error(f"Error refreshing token: {e}")
+            raise
+
+    async def exchange_authorization(
+        self,
+        metadata: ServerMetadataDiscovery,
+        registration: DynamicClientRegistration,
+        redirect_uri: AnyHttpUrl,
+        code_verifier: str,
+        authorization_code: str,
+        grant_type: str = "authorization_code",
+    ) -> AccessToken:
+        """
+        Exchange an authorization code for an access token using OAuth 2.1 with PKCE.
+        """
+        if grant_type not in (registration.grant_types or []):
+            raise GrantNotSupported(f"Grant type {grant_type} not supported")
+
         # Get token endpoint from server metadata or use default
         token_endpoint = str(metadata.token_endpoint)
 
         # Prepare token request parameters
         data = {
-            "grant_type": self.GRANT_TYPE,
+            "grant_type": grant_type,
             "code": authorization_code,
-            "redirect_uri": str(self.provider.redirect_url),
+            "redirect_uri": str(redirect_uri),
             "client_id": registration.client_id,
             "code_verifier": code_verifier,
         }
@@ -615,84 +540,45 @@ class OAuthClient:
         except httpx.HTTPStatusError as e:
             logger.error(f"HTTP error during token exchange: {e.response.status_code}")
             if e.response.content:
-                try:
-                    error_data = json.loads(e.response.content)
-                    logger.error(f"Error details: {error_data}")
-                except json.JSONDecodeError:
-                    logger.error(f"Error content: {e.response.content}")
+                logger.error(f"Error content: {e.response.content}")
             raise
         except Exception as e:
             logger.error(f"Unexpected error during token exchange: {e}")
             raise
 
-    async def auth(self, authorization_code: str, code_verifier: str) -> AccessToken:
-        """
-        Complete the OAuth 2.1 authorization flow by exchanging authorization code
-        for tokens.
 
-        Args:
-            authorization_code: The authorization code received from the authorization
-                server
-            code_verifier: The PKCE code verifier used to generate the code challenge
+def get_authorization_url(
+    authorization_endpoint: AnyHttpUrl,
+    redirect_uri: AnyHttpUrl,
+    client_id: str,
+    code_verifier: str,
+    scope: str | None = None,
+) -> AnyHttpUrl:
+    """Generate an OAuth 2.1 authorization URL for the user agent.
 
-        Returns:
-            AccessToken: The resulting access token
-        """
-        metadata = await self.discover_auth_metadata() or self.default_metadata()
-        registration = await self._obtain_client(metadata)
+    This method generates a URL that the user agent (browser) should visit to
+    authenticate the user and authorize the application. It includes PKCE
+    (Proof Key for Code Exchange) for enhanced security as required by OAuth 2.1.
+    """
+    # Generate code challenge from verifier using SHA-256
+    code_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+        .decode()
+        .rstrip("=")
+    )
 
-        code_verifier = self.provider.code_verifier()
+    # Build authorization URL with necessary parameters
+    params = {
+        "response_type": "code",
+        "client_id": client_id,
+        "redirect_uri": str(redirect_uri),
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
 
-        authorization_url = self.get_authorization_url(
-            metadata.authorization_endpoint,
-            self.provider.redirect_url,
-            registration.client_id,
-            code_verifier,
-            self.scope,
-        )
+    # Add scope if provided or use the one from registration
+    if scope:
+        params["scope"] = scope
 
-        await self.provider.open_user_agent(AnyHttpUrl(authorization_url))
-
-        return await self.exchange_authorization(
-            metadata, registration, code_verifier, authorization_code
-        )
-
-    def get_authorization_url(
-        self,
-        authorization_endpoint: AnyHttpUrl,
-        redirect_uri: AnyHttpUrl,
-        client_id: str,
-        code_verifier: str,
-        scope: str | None = None,
-    ) -> AnyHttpUrl:
-        """Generate an OAuth 2.1 authorization URL for the user agent.
-
-        This method generates a URL that the user agent (browser) should visit to
-        authenticate the user and authorize the application. It includes PKCE
-        (Proof Key for Code Exchange) for enhanced security as required by OAuth 2.1.
-        """
-        # Create a custom verifier for this authorization request
-        code_verifier = self.provider.code_verifier()
-
-        # Generate code challenge from verifier using SHA-256
-        code_challenge = (
-            base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
-            .decode()
-            .rstrip("=")
-        )
-
-        # Build authorization URL with necessary parameters
-        params = {
-            "response_type": "code",
-            "client_id": client_id,
-            "redirect_uri": str(redirect_uri),
-            "code_challenge": code_challenge,
-            "code_challenge_method": "S256",
-        }
-
-        # Add scope if provided or use the one from registration
-        if scope:
-            params["scope"] = scope
-
-        # Construct the full authorization URL
-        return AnyHttpUrl(f"{authorization_endpoint}?{urlencode(params)}")
+    # Construct the full authorization URL
+    return AnyUrl(f"{authorization_endpoint}?{urlencode(params)}")
