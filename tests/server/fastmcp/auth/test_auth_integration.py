@@ -408,27 +408,6 @@ class TestAuthEndpoints:
         )  # Contains validation error messages
 
     @pytest.mark.anyio
-    @pytest.mark.parametrize(
-        "registered_client", [{"grant_types": ["authorization_code"]}], indirect=True
-    )
-    async def test_token_unsupported_grant_type(self, test_client, registered_client):
-        """Test token endpoint error - unsupported grant type."""
-        # Try refresh_token grant with client that only supports authorization_code
-        response = await test_client.post(
-            "/token",
-            data={
-                "grant_type": "refresh_token",
-                "client_id": registered_client["client_id"],
-                "client_secret": registered_client["client_secret"],
-                "refresh_token": "some_refresh_token",
-            },
-        )
-        assert response.status_code == 400
-        error_response = response.json()
-        assert error_response["error"] == "unsupported_grant_type"
-        assert "supported grant types" in error_response["error_description"]
-
-    @pytest.mark.anyio
     async def test_token_invalid_auth_code(
         self, test_client, registered_client, pkce_challenge
     ):
@@ -1000,6 +979,29 @@ class TestAuthEndpoints:
 
         # Check that default scopes were applied
         assert registered_client.scope == "read write"
+
+    @pytest.mark.anyio
+    async def test_client_registration_invalid_grant_type(
+        self, test_client: httpx.AsyncClient
+    ):
+        client_metadata = {
+            "redirect_uris": ["https://client.example.com/callback"],
+            "client_name": "Test Client",
+            "grant_types": ["authorization_code"],
+        }
+
+        response = await test_client.post(
+            "/register",
+            json=client_metadata,
+        )
+        assert response.status_code == 400
+        error_data = response.json()
+        assert "error" in error_data
+        assert error_data["error"] == "invalid_client_metadata"
+        assert (
+            error_data["error_description"]
+            == "grant_types must be authorization_code and refresh_token"
+        )
 
 
 class TestFastMCPWithAuth:

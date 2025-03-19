@@ -75,6 +75,17 @@ class RegistrationHandler:
                     ),
                     status_code=400,
                 )
+        if set(client_metadata.grant_types) != set(
+            ["authorization_code", "refresh_token"]
+        ):
+            return PydanticJSONResponse(
+                content=RegistrationErrorResponse(
+                    error="invalid_client_metadata",
+                    error_description="grant_types must be authorization_code "
+                    "and refresh_token",
+                ),
+                status_code=400,
+            )
 
         client_id_issued_at = int(time.time())
         client_secret_expires_at = (
