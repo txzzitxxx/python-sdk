@@ -16,7 +16,7 @@ from typing import Any, Awaitable, Callable, Generic, Literal, Sequence
 import anyio
 import pydantic_core
 import uvicorn
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import BaseModel, Field
 from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sse_starlette import EventSourceResponse
@@ -30,7 +30,9 @@ from mcp.server.auth.middleware.bearer_auth import (
     RequireAuthMiddleware,
 )
 from mcp.server.auth.provider import OAuthServerProvider
-from mcp.server.auth.router import ClientRegistrationOptions, RevocationOptions
+from mcp.server.auth.router import (
+    AuthSettings,
+)
 from mcp.server.fastmcp.exceptions import ResourceError
 from mcp.server.fastmcp.prompts import Prompt, PromptManager
 from mcp.server.fastmcp.resources import FunctionResource, Resource, ResourceManager
@@ -71,6 +73,8 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
     model_config = SettingsConfigDict(
         env_prefix="FASTMCP_",
         env_file=".env",
+        env_nested_delimiter="__",
+        nested_model_default_partial_update=True,
         extra="ignore",
     )
 
@@ -100,17 +104,7 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
         Callable[["FastMCP"], AbstractAsyncContextManager[LifespanResultT]] | None
     ) = Field(None, description="Lifespan context manager")
 
-    auth_issuer_url: AnyHttpUrl | None = Field(
-        None,
-        description="URL advertised as OAuth issuer; this should be the URL the server "
-        "is reachable at",
-    )
-    auth_service_documentation_url: AnyHttpUrl | None = Field(
-        None, description="Service documentation URL advertised by OAuth"
-    )
-    auth_client_registration_options: ClientRegistrationOptions | None = None
-    auth_revocation_options: RevocationOptions | None = None
-    auth_required_scopes: list[str] | None = None
+    auth: AuthSettings | None = None
 
 
 def lifespan_wrapper(
@@ -151,6 +145,11 @@ class FastMCP:
         self._prompt_manager = PromptManager(
             warn_on_duplicate_prompts=self.settings.warn_on_duplicate_prompts
         )
+        if (self.settings.auth is not None) != (auth_provider is not None):
+            raise ValueError(
+                "settings.auth must be specified if and only if auth_provider "
+                "is specified"
+            )
         self._auth_provider = auth_provider
         self._custom_starlette_routes = []
         self.dependencies = self.settings.dependencies
@@ -541,11 +540,14 @@ class FastMCP:
         # Create routes
         routes = []
         middleware = []
-        required_scopes = self.settings.auth_required_scopes or []
+        required_scopes = []
 
         # Add auth endpoints if auth provider is configured
-        if self._auth_provider and self.settings.auth_issuer_url:
+        if self._auth_provider:
+            assert self.settings.auth
             from mcp.server.auth.router import create_auth_routes
+
+            required_scopes = self.settings.auth.required_scopes or []
 
             middleware = [
                 # extract auth info from request (but do not require it)
@@ -562,10 +564,10 @@ class FastMCP:
             routes.extend(
                 create_auth_routes(
                     provider=self._auth_provider,
-                    issuer_url=self.settings.auth_issuer_url,
-                    service_documentation_url=self.settings.auth_service_documentation_url,
-                    client_registration_options=self.settings.auth_client_registration_options,
-                    revocation_options=self.settings.auth_revocation_options,
+                    issuer_url=self.settings.auth.issuer_url,
+                    service_documentation_url=self.settings.auth.service_documentation_url,
+                    client_registration_options=self.settings.auth.client_registration_options,
+                    revocation_options=self.settings.auth.revocation_options,
                 )
             )
 

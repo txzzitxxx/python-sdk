@@ -16,7 +16,6 @@ import pytest
 from httpx_sse import aconnect_sse
 from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
-from starlette.routing import Mount
 
 from mcp.server.auth.provider import (
     AuthInfo,
@@ -28,6 +27,7 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.server.auth.router import (
+    AuthSettings,
     ClientRegistrationOptions,
     RevocationOptions,
     create_auth_routes,
@@ -958,11 +958,13 @@ class TestFastMCPWithAuth:
         # Create FastMCP server with auth provider
         mcp = FastMCP(
             auth_provider=mock_oauth_provider,
-            auth_issuer_url="https://auth.example.com",
             require_auth=True,
-            auth_client_registration_options=ClientRegistrationOptions(enabled=True),
-            auth_revocation_options=RevocationOptions(enabled=True),
-            auth_required_scopes=["read"],
+            auth=AuthSettings(
+                issuer_url=AnyHttpUrl("https://auth.example.com"),
+                client_registration_options=ClientRegistrationOptions(enabled=True),
+                revocation_options=RevocationOptions(enabled=True),
+                required_scopes=["read"],
+            ),
         )
 
         # Add a test tool
