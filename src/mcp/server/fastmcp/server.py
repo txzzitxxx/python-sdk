@@ -30,7 +30,7 @@ from mcp.server.auth.middleware.bearer_auth import (
     RequireAuthMiddleware,
 )
 from mcp.server.auth.provider import OAuthServerProvider
-from mcp.server.auth.routes import (
+from mcp.server.auth.settings import (
     AuthSettings,
 )
 from mcp.server.fastmcp.exceptions import ResourceError

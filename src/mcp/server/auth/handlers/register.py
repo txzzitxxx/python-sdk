@@ -11,6 +11,7 @@ from starlette.responses import Response
 from mcp.server.auth.errors import stringify_pydantic_error
 from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.provider import OAuthRegisteredClientsStore
+from mcp.server.auth.settings import ClientRegistrationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
 
 
@@ -33,7 +34,7 @@ class RegistrationErrorResponse(BaseModel):
 @dataclass
 class RegistrationHandler:
     clients_store: OAuthRegisteredClientsStore
-    client_secret_expiry_seconds: int | None
+    options: ClientRegistrationOptions
 
     async def handle(self, request: Request) -> Response:
         # Implements dynamic client registration as defined in https://datatracker.ietf.org/doc/html/rfc7591#section-3.1
@@ -41,6 +42,8 @@ class RegistrationHandler:
             # Parse request body as JSON
             body = await request.json()
             client_metadata = OAuthClientMetadata.model_validate(body)
+
+            # Scope validation is handled below
         except ValidationError as validation_error:
             return PydanticJSONResponse(
                 content=RegistrationErrorResponse(
@@ -56,10 +59,27 @@ class RegistrationHandler:
             # cryptographically secure random 32-byte hex string
             client_secret = secrets.token_hex(32)
 
+        if client_metadata.scope is None and self.options.default_scopes is not None:
+            client_metadata.scope = " ".join(self.options.default_scopes)
+        elif (
+            client_metadata.scope is not None and self.options.valid_scopes is not None
+        ):
+            requested_scopes = set(client_metadata.scope.split())
+            valid_scopes = set(self.options.valid_scopes)
+            if not requested_scopes.issubset(valid_scopes):
+                return PydanticJSONResponse(
+                    content=RegistrationErrorResponse(
+                        error="invalid_client_metadata",
+                        error_description="Requested scopes are not valid: "
+                        f"{', '.join(requested_scopes - valid_scopes)}",
+                    ),
+                    status_code=400,
+                )
+
         client_id_issued_at = int(time.time())
         client_secret_expires_at = (
-            client_id_issued_at + self.client_secret_expiry_seconds
-            if self.client_secret_expiry_seconds is not None
+            client_id_issued_at + self.options.client_secret_expiry_seconds
+            if self.options.client_secret_expiry_seconds is not None
             else None
         )
 

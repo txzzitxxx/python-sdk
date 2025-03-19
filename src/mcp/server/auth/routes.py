@@ -1,6 +1,6 @@
 from typing import Callable
 
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl
 from starlette.routing import Route
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
@@ -10,28 +10,8 @@ from mcp.server.auth.handlers.revoke import RevocationHandler
 from mcp.server.auth.handlers.token import TokenHandler
 from mcp.server.auth.middleware.client_auth import ClientAuthenticator
 from mcp.server.auth.provider import OAuthServerProvider
+from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.shared.auth import OAuthMetadata
-
-
-class ClientRegistrationOptions(BaseModel):
-    enabled: bool = False
-    client_secret_expiry_seconds: int | None = None
-
-
-class RevocationOptions(BaseModel):
-    enabled: bool = False
-
-
-class AuthSettings(BaseModel):
-    issuer_url: AnyHttpUrl = Field(
-        ...,
-        description="URL advertised as OAuth issuer; this should be the URL the server "
-        "is reachable at",
-    )
-    service_documentation_url: AnyHttpUrl | None = None
-    client_registration_options: ClientRegistrationOptions | None = None
-    revocation_options: RevocationOptions | None = None
-    required_scopes: list[str] | None = None
 
 
 def validate_issuer_url(url: AnyHttpUrl):
@@ -109,7 +89,7 @@ def create_auth_routes(
     if client_registration_options.enabled:
         registration_handler = RegistrationHandler(
             provider.clients_store,
-            client_secret_expiry_seconds=client_registration_options.client_secret_expiry_seconds,
+            options=client_registration_options,
         )
         routes.append(
             Route(

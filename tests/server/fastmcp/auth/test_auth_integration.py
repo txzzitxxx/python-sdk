@@ -27,11 +27,11 @@ from mcp.server.auth.provider import (
     construct_redirect_uri,
 )
 from mcp.server.auth.routes import (
-    AuthSettings,
     ClientRegistrationOptions,
     RevocationOptions,
     create_auth_routes,
 )
+from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import (
     OAuthClientInformationFull,
@@ -226,7 +226,11 @@ def auth_app(mock_oauth_provider):
         mock_oauth_provider,
         AnyHttpUrl("https://auth.example.com"),
         AnyHttpUrl("https://docs.example.com"),
-        client_registration_options=ClientRegistrationOptions(enabled=True),
+        client_registration_options=ClientRegistrationOptions(
+            enabled=True,
+            valid_scopes=["read", "write", "profile"],
+            default_scopes=["read", "write"],
+        ),
         revocation_options=RevocationOptions(enabled=True),
     )
 
@@ -945,6 +949,57 @@ class TestAuthEndpoints:
         error_response = response.json()
         assert error_response["error"] == "invalid_request"
         assert "token_type_hint" in error_response["error_description"]
+
+    @pytest.mark.anyio
+    async def test_client_registration_disallowed_scopes(
+        self, test_client: httpx.AsyncClient
+    ):
+        """Test client registration with scopes that are not allowed."""
+        client_metadata = {
+            "redirect_uris": ["https://client.example.com/callback"],
+            "client_name": "Test Client",
+            "scope": "read write profile admin",  # 'admin' is not in valid_scopes
+        }
+
+        response = await test_client.post(
+            "/register",
+            json=client_metadata,
+        )
+        assert response.status_code == 400
+        error_data = response.json()
+        assert "error" in error_data
+        assert error_data["error"] == "invalid_client_metadata"
+        assert "scope" in error_data["error_description"]
+        assert "admin" in error_data["error_description"]
+
+    @pytest.mark.anyio
+    async def test_client_registration_default_scopes(
+        self, test_client: httpx.AsyncClient, mock_oauth_provider: MockOAuthProvider
+    ):
+        client_metadata = {
+            "redirect_uris": ["https://client.example.com/callback"],
+            "client_name": "Test Client",
+            # No scope specified
+        }
+
+        response = await test_client.post(
+            "/register",
+            json=client_metadata,
+        )
+        assert response.status_code == 201
+        client_info = response.json()
+
+        # Verify client was registered successfully
+        assert client_info["scope"] == "read write"
+
+        # Retrieve the client from the store to verify default scopes
+        registered_client = await mock_oauth_provider.clients_store.get_client(
+            client_info["client_id"]
+        )
+        assert registered_client is not None
+
+        # Check that default scopes were applied
+        assert registered_client.scope == "read write"
 
 
 class TestFastMCPWithAuth:
