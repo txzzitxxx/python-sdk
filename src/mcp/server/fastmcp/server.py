@@ -11,7 +11,7 @@ from contextlib import (
     asynccontextmanager,
 )
 from itertools import chain
-from typing import Any, Callable, Generic, Literal, Sequence
+from typing import Any, Awaitable, Callable, Generic, Literal, Sequence
 
 import anyio
 import pydantic_core
@@ -24,6 +24,7 @@ from starlette.applications import Starlette
 from starlette.authentication import requires
 from starlette.middleware.authentication import AuthenticationMiddleware
 
+from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import (
     BearerAuthBackend,
     RequireAuthMiddleware,
@@ -151,6 +152,7 @@ class FastMCP:
             warn_on_duplicate_prompts=self.settings.warn_on_duplicate_prompts
         )
         self._auth_provider = auth_provider
+        self._custom_starlette_routes = []
         self.dependencies = self.settings.dependencies
 
         # Set up MCP protocol handlers
@@ -477,6 +479,33 @@ class FastMCP:
 
         return decorator
 
+    def custom_route(
+        self,
+        path: str,
+        methods: list[str],
+        name: str | None = None,
+        include_in_schema: bool = True,
+    ):
+        from starlette.requests import Request
+        from starlette.responses import Response
+        from starlette.routing import Route
+
+        def decorator(
+            func: Callable[[Request], Awaitable[Response]],
+        ) -> Callable[[Request], Awaitable[Response]]:
+            self._custom_starlette_routes.append(
+                Route(
+                    path,
+                    endpoint=func,
+                    methods=methods,
+                    name=name,
+                    include_in_schema=include_in_schema,
+                )
+            )
+            return func
+
+        return decorator
+
     async def run_stdio_async(self) -> None:
         """Run the server using stdio transport."""
         async with stdio_server() as (read_stream, write_stream):
@@ -513,30 +542,32 @@ class FastMCP:
         routes = []
         middleware = []
         required_scopes = self.settings.auth_required_scopes or []
-        auth_router = None
 
         # Add auth endpoints if auth provider is configured
         if self._auth_provider and self.settings.auth_issuer_url:
-            from mcp.server.auth.router import create_auth_router
+            from mcp.server.auth.router import create_auth_routes
 
-            # Set up bearer auth middleware if auth is required
             middleware = [
+                # extract auth info from request (but do not require it)
                 Middleware(
                     AuthenticationMiddleware,
                     backend=BearerAuthBackend(
                         provider=self._auth_provider,
                     ),
-                )
+                ),
+                # Add the auth context middleware to store
+                # authenticated user in a contextvar
+                Middleware(AuthContextMiddleware),
             ]
-            auth_router = create_auth_router(
-                provider=self._auth_provider,
-                issuer_url=self.settings.auth_issuer_url,
-                service_documentation_url=self.settings.auth_service_documentation_url,
-                client_registration_options=self.settings.auth_client_registration_options,
-                revocation_options=self.settings.auth_revocation_options,
+            routes.extend(
+                create_auth_routes(
+                    provider=self._auth_provider,
+                    issuer_url=self.settings.auth_issuer_url,
+                    service_documentation_url=self.settings.auth_service_documentation_url,
+                    client_registration_options=self.settings.auth_client_registration_options,
+                    revocation_options=self.settings.auth_revocation_options,
+                )
             )
-
-            # Add the auth router as a mount
 
         routes.append(
             Route(
@@ -549,8 +580,8 @@ class FastMCP:
                 app=RequireAuthMiddleware(sse.handle_post_message, required_scopes),
             )
         )
-        if auth_router:
-            routes.append(Mount("/", app=auth_router))
+        # mount these routes last, so they have the lowest route matching precedence
+        routes.extend(self._custom_starlette_routes)
 
         # Create Starlette app with routes and middleware
         return Starlette(

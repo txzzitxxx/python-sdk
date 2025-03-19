@@ -30,7 +30,7 @@ from mcp.server.auth.provider import (
 from mcp.server.auth.router import (
     ClientRegistrationOptions,
     RevocationOptions,
-    create_auth_router,
+    create_auth_routes,
 )
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.auth import (
@@ -222,7 +222,7 @@ def mock_oauth_provider():
 @pytest.fixture
 def auth_app(mock_oauth_provider):
     # Create auth router
-    auth_router = create_auth_router(
+    auth_routes = create_auth_routes(
         mock_oauth_provider,
         AnyHttpUrl("https://auth.example.com"),
         AnyHttpUrl("https://docs.example.com"),
@@ -231,7 +231,7 @@ def auth_app(mock_oauth_provider):
     )
 
     # Create Starlette app
-    app = Starlette(routes=[Mount("/", app=auth_router)])
+    app = Starlette(routes=auth_routes)
 
     return app
 

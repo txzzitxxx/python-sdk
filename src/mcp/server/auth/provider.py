@@ -1,4 +1,4 @@
-from typing import Protocol
+from typing import Generic, Protocol, TypeVar
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, BaseModel
@@ -62,7 +62,16 @@ class OAuthRegisteredClientsStore(Protocol):
         ...
 
 
-class OAuthServerProvider(Protocol):
+# NOTE: FastMCP doesn't render any of these types in the user response, so it's
+# OK to add fields to subclasses which should not be exposed externally.
+AuthorizationCodeT = TypeVar("AuthorizationCodeT", bound=AuthorizationCode)
+RefreshTokenT = TypeVar("RefreshTokenT", bound=RefreshToken)
+AuthInfoT = TypeVar("AuthInfoT", bound=AuthInfo)
+
+
+class OAuthServerProvider(
+    Protocol, Generic[AuthorizationCodeT, RefreshTokenT, AuthInfoT]
+):
     @property
     def clients_store(self) -> OAuthRegisteredClientsStore:
         """
@@ -107,7 +116,7 @@ class OAuthServerProvider(Protocol):
 
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
-    ) -> AuthorizationCode | None:
+    ) -> AuthorizationCodeT | None:
         """
         Loads metadata for the authorization code challenge.
 
@@ -121,7 +130,7 @@ class OAuthServerProvider(Protocol):
         ...
 
     async def exchange_authorization_code(
-        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCode
+        self, client: OAuthClientInformationFull, authorization_code: AuthorizationCodeT
     ) -> OAuthToken:
         """
         Exchanges an authorization code for an access token.
@@ -137,12 +146,12 @@ class OAuthServerProvider(Protocol):
 
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
-    ) -> RefreshToken | None: ...
+    ) -> RefreshTokenT | None: ...
 
     async def exchange_refresh_token(
         self,
         client: OAuthClientInformationFull,
-        refresh_token: RefreshToken,
+        refresh_token: RefreshTokenT,
         scopes: list[str],
     ) -> OAuthToken:
         """
@@ -158,7 +167,7 @@ class OAuthServerProvider(Protocol):
         """
         ...
 
-    async def load_access_token(self, token: str) -> AuthInfo | None:
+    async def load_access_token(self, token: str) -> AuthInfoT | None:
         """
         Verifies an access token and returns information about it.
 
@@ -172,7 +181,7 @@ class OAuthServerProvider(Protocol):
 
     async def revoke_token(
         self,
-        token: AuthInfo | RefreshToken,
+        token: AuthInfoT | RefreshTokenT,
     ) -> None:
         """
         Revokes an access or refresh token.

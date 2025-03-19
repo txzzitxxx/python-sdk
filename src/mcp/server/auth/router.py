@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Callable
 
 from pydantic import AnyHttpUrl
-from starlette.routing import Route, Router
+from starlette.routing import Route
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
 from mcp.server.auth.handlers.metadata import MetadataHandler
@@ -57,27 +57,13 @@ REGISTRATION_PATH = "/register"
 REVOCATION_PATH = "/revoke"
 
 
-def create_auth_router(
+def create_auth_routes(
     provider: OAuthServerProvider,
     issuer_url: AnyHttpUrl,
     service_documentation_url: AnyHttpUrl | None = None,
     client_registration_options: ClientRegistrationOptions | None = None,
     revocation_options: RevocationOptions | None = None,
-) -> Router:
-    """
-    Create a Starlette router with standard MCP authorization endpoints.
-
-    Args:
-        provider: OAuth server provider
-        issuer_url: Issuer URL for the authorization server
-        service_documentation_url: Optional URL for service documentation
-        client_registration_options: Options for client registration
-        revocation_options: Options for token revocation
-
-    Returns:
-        Starlette router with authorization endpoints
-    """
-
+) -> list[Route]:
     validate_issuer_url(issuer_url)
 
     client_registration_options = (
@@ -93,32 +79,30 @@ def create_auth_router(
     client_authenticator = ClientAuthenticator(provider.clients_store)
 
     # Create routes
-    auth_router = Router(
-        routes=[
-            Route(
-                "/.well-known/oauth-authorization-server",
-                endpoint=MetadataHandler(metadata).handle,
-                methods=["GET"],
-            ),
-            Route(
-                AUTHORIZATION_PATH,
-                endpoint=AuthorizationHandler(provider).handle,
-                methods=["GET", "POST"],
-            ),
-            Route(
-                TOKEN_PATH,
-                endpoint=TokenHandler(provider, client_authenticator).handle,
-                methods=["POST"],
-            ),
-        ]
-    )
+    routes = [
+        Route(
+            "/.well-known/oauth-authorization-server",
+            endpoint=MetadataHandler(metadata).handle,
+            methods=["GET"],
+        ),
+        Route(
+            AUTHORIZATION_PATH,
+            endpoint=AuthorizationHandler(provider).handle,
+            methods=["GET", "POST"],
+        ),
+        Route(
+            TOKEN_PATH,
+            endpoint=TokenHandler(provider, client_authenticator).handle,
+            methods=["POST"],
+        ),
+    ]
 
     if client_registration_options.enabled:
         registration_handler = RegistrationHandler(
             provider.clients_store,
             client_secret_expiry_seconds=client_registration_options.client_secret_expiry_seconds,
         )
-        auth_router.routes.append(
+        routes.append(
             Route(
                 REGISTRATION_PATH,
                 endpoint=registration_handler.handle,
@@ -128,11 +112,11 @@ def create_auth_router(
 
     if revocation_options.enabled:
         revocation_handler = RevocationHandler(provider, client_authenticator)
-        auth_router.routes.append(
+        routes.append(
             Route(REVOCATION_PATH, endpoint=revocation_handler.handle, methods=["POST"])
         )
 
-    return auth_router
+    return routes
 
 
 def modify_url_path(url: AnyHttpUrl, path_mapper: Callable[[str], str]) -> AnyHttpUrl:

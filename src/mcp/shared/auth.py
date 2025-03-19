@@ -41,7 +41,8 @@ class OAuthClientMetadata(BaseModel):
     )
     # grant_types: this implementation only supports authorization_code & refresh_token
     grant_types: list[Literal["authorization_code", "refresh_token"]] = [
-        "authorization_code"
+        "authorization_code",
+        "refresh_token",
     ]
     # this implementation only supports code; ie: it does not support implicit grants
     response_types: list[Literal["code"]] = ["code"]
