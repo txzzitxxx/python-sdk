@@ -28,9 +28,7 @@ class AuthSettings(BaseModel):
         description="URL advertised as OAuth issuer; this should be the URL the server "
         "is reachable at",
     )
-    service_documentation_url: AnyHttpUrl | None = Field(
-        None, description="Service documentation URL advertised by OAuth"
-    )
+    service_documentation_url: AnyHttpUrl | None = None
     client_registration_options: ClientRegistrationOptions | None = None
     revocation_options: RevocationOptions | None = None
     required_scopes: list[str] | None = None

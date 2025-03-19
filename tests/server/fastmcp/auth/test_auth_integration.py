@@ -26,7 +26,7 @@ from mcp.server.auth.provider import (
     RefreshToken,
     construct_redirect_uri,
 )
-from mcp.server.auth.router import (
+from mcp.server.auth.routes import (
     AuthSettings,
     ClientRegistrationOptions,
     RevocationOptions,

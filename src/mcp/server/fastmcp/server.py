@@ -30,7 +30,7 @@ from mcp.server.auth.middleware.bearer_auth import (
     RequireAuthMiddleware,
 )
 from mcp.server.auth.provider import OAuthServerProvider
-from mcp.server.auth.router import (
+from mcp.server.auth.routes import (
     AuthSettings,
 )
 from mcp.server.fastmcp.exceptions import ResourceError
@@ -545,7 +545,7 @@ class FastMCP:
         # Add auth endpoints if auth provider is configured
         if self._auth_provider:
             assert self.settings.auth
-            from mcp.server.auth.router import create_auth_routes
+            from mcp.server.auth.routes import create_auth_routes
 
             required_scopes = self.settings.auth.required_scopes or []
 
