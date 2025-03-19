@@ -4,6 +4,8 @@ A modified version of httpx.ASGITransport that supports streaming responses.
 This transport runs the ASGI app as a separate anyio task, allowing it to
 handle streaming responses like SSE where the app doesn't terminate until
 the connection is closed.
+
+This is only intended for writing tests for the SSE transport.
 """
 
 import typing

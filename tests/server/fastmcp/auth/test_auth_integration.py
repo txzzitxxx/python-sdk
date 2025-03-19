@@ -39,7 +39,7 @@ from mcp.shared.auth import (
 )
 from mcp.types import JSONRPCRequest
 
-from .streaming_asgi_transport import StreamingASGITransport
+from mcp.server.streaming_asgi_transport import StreamingASGITransport
 
 
 # Mock client store for testing
