@@ -10,15 +10,15 @@ from starlette.exceptions import HTTPException
 from starlette.requests import HTTPConnection
 from starlette.types import Scope
 
-from mcp.server.auth.provider import AuthInfo, OAuthServerProvider
+from mcp.server.auth.provider import AccessToken, OAuthServerProvider
 
 
 class AuthenticatedUser(SimpleUser):
     """User with authentication info."""
 
-    def __init__(self, auth_info: AuthInfo):
+    def __init__(self, auth_info: AccessToken):
         super().__init__(auth_info.client_id)
-        self.auth_info = auth_info
+        self.access_token = auth_info
         self.scopes = auth_info.scopes
 
 

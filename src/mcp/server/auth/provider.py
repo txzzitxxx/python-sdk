@@ -33,7 +33,7 @@ class RefreshToken(BaseModel):
     expires_at: int | None = None
 
 
-class AuthInfo(BaseModel):
+class AccessToken(BaseModel):
     token: str
     client_id: str
     scopes: list[str]
@@ -91,7 +91,7 @@ class TokenError(Exception):
 # OK to add fields to subclasses which should not be exposed externally.
 AuthorizationCodeT = TypeVar("AuthorizationCodeT", bound=AuthorizationCode)
 RefreshTokenT = TypeVar("RefreshTokenT", bound=RefreshToken)
-AuthInfoT = TypeVar("AuthInfoT", bound=AuthInfo)
+AuthInfoT = TypeVar("AuthInfoT", bound=AccessToken)
 
 
 class OAuthServerProvider(

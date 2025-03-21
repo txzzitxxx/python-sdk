@@ -5,7 +5,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
-from mcp.server.auth.provider import AuthInfo
+from mcp.server.auth.provider import AccessToken
 
 # Create a contextvar to store the authenticated user
 # The default is None, indicating no authenticated user is present
@@ -14,15 +14,15 @@ auth_context_var = contextvars.ContextVar[AuthenticatedUser | None](
 )
 
 
-def get_current_auth_info() -> AuthInfo | None:
+def get_access_token() -> AccessToken | None:
     """
-    Get the auth info from the current context.
+    Get the access token from the current context.
 
     Returns:
-        The auth info if an authenticated user is available, None otherwise.
+        The access token if an authenticated user is available, None otherwise.
     """
     auth_user = auth_context_var.get()
-    return auth_user.auth_info if auth_user else None
+    return auth_user.access_token if auth_user else None
 
 
 class AuthContextMiddleware(BaseHTTPMiddleware):

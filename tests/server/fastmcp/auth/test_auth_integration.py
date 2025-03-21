@@ -18,7 +18,7 @@ from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
 
 from mcp.server.auth.provider import (
-    AuthInfo,
+    AccessToken,
     AuthorizationCode,
     AuthorizationParams,
     OAuthServerProvider,
@@ -88,7 +88,7 @@ class MockOAuthProvider(OAuthServerProvider):
         refresh_token = f"refresh_{secrets.token_hex(32)}"
 
         # Store the tokens
-        self.tokens[access_token] = AuthInfo(
+        self.tokens[access_token] = AccessToken(
             token=access_token,
             client_id=client.client_id,
             scopes=authorization_code.scopes,
@@ -151,7 +151,7 @@ class MockOAuthProvider(OAuthServerProvider):
         new_refresh_token = f"refresh_{secrets.token_hex(32)}"
 
         # Store the new tokens
-        self.tokens[new_access_token] = AuthInfo(
+        self.tokens[new_access_token] = AccessToken(
             token=new_access_token,
             client_id=client.client_id,
             scopes=scopes or token_info.scopes,
@@ -172,27 +172,27 @@ class MockOAuthProvider(OAuthServerProvider):
             refresh_token=new_refresh_token,
         )
 
-    async def load_access_token(self, token: str) -> AuthInfo | None:
+    async def load_access_token(self, token: str) -> AccessToken | None:
         token_info = self.tokens.get(token)
 
         # Check if token is expired
         # if token_info.expires_at < int(time.time()):
         #     raise InvalidTokenError("Access token has expired")
 
-        return token_info and AuthInfo(
+        return token_info and AccessToken(
             token=token,
             client_id=token_info.client_id,
             scopes=token_info.scopes,
             expires_at=token_info.expires_at,
         )
 
-    async def revoke_token(self, token: AuthInfo | RefreshToken) -> None:
+    async def revoke_token(self, token: AccessToken | RefreshToken) -> None:
         match token:
             case RefreshToken():
                 # Remove the refresh token
                 del self.refresh_tokens[token.token]
 
-            case AuthInfo():
+            case AccessToken():
                 # Remove the access token
                 del self.tokens[token.token]
 

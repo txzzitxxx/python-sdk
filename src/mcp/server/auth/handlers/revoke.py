@@ -14,7 +14,7 @@ from mcp.server.auth.middleware.client_auth import (
     AuthenticationError,
     ClientAuthenticator,
 )
-from mcp.server.auth.provider import AuthInfo, OAuthServerProvider, RefreshToken
+from mcp.server.auth.provider import AccessToken, OAuthServerProvider, RefreshToken
 
 
 class RevocationRequest(BaseModel):
@@ -75,7 +75,7 @@ class RevocationHandler:
         if revocation_request.token_type_hint == "refresh_token":
             loaders = reversed(loaders)
 
-        token: None | AuthInfo | RefreshToken = None
+        token: None | AccessToken | RefreshToken = None
         for loader in loaders:
             token = await loader(revocation_request.token)
             if token is not None:
