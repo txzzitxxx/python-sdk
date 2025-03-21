@@ -16,7 +16,7 @@ from mcp.server.auth.middleware.client_auth import (
     AuthenticationError,
     ClientAuthenticator,
 )
-from mcp.server.auth.provider import OAuthServerProvider
+from mcp.server.auth.provider import OAuthServerProvider, TokenError, TokenErrorCode
 from mcp.shared.auth import OAuthToken
 
 
@@ -56,14 +56,7 @@ class TokenErrorResponse(BaseModel):
     See https://datatracker.ietf.org/doc/html/rfc6749#section-5.2
     """
 
-    error: Literal[
-        "invalid_request",
-        "invalid_client",
-        "invalid_grant",
-        "unauthorized_client",
-        "unsupported_grant_type",
-        "invalid_scope",
-    ]
+    error: TokenErrorCode
     error_description: str | None = None
     error_uri: AnyHttpUrl | None = None
 
@@ -184,10 +177,18 @@ class TokenHandler:
                         )
                     )
 
-                # Exchange authorization code for tokens
-                tokens = await self.provider.exchange_authorization_code(
-                    client_info, auth_code
-                )
+                try:
+                    # Exchange authorization code for tokens
+                    tokens = await self.provider.exchange_authorization_code(
+                        client_info, auth_code
+                    )
+                except TokenError as e:
+                    return self.response(
+                        TokenErrorResponse(
+                            error=e.error,
+                            error_description=e.error_description,
+                        )
+                    )
 
             case RefreshTokenRequest():
                 refresh_token = await self.provider.load_refresh_token(
@@ -233,9 +234,17 @@ class TokenHandler:
                             )
                         )
 
-                # Exchange refresh token for new tokens
-                tokens = await self.provider.exchange_refresh_token(
-                    client_info, refresh_token, scopes
-                )
+                try:
+                    # Exchange refresh token for new tokens
+                    tokens = await self.provider.exchange_refresh_token(
+                        client_info, refresh_token, scopes
+                    )
+                except TokenError as e:
+                    return self.response(
+                        TokenErrorResponse(
+                            error=e.error,
+                            error_description=e.error_description,
+                        )
+                    )
 
         return self.response(TokenSuccessResponse(root=tokens))

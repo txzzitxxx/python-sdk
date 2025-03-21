@@ -21,7 +21,6 @@ from mcp.server.auth.provider import (
     AuthInfo,
     AuthorizationCode,
     AuthorizationParams,
-    OAuthRegisteredClientsStore,
     OAuthServerProvider,
     RefreshToken,
     construct_redirect_uri,
@@ -33,38 +32,27 @@ from mcp.server.auth.routes import (
 )
 from mcp.server.auth.settings import AuthSettings
 from mcp.server.fastmcp import FastMCP
+from mcp.server.streaming_asgi_transport import StreamingASGITransport
 from mcp.shared.auth import (
     OAuthClientInformationFull,
     OAuthToken,
 )
 from mcp.types import JSONRPCRequest
 
-from mcp.server.streaming_asgi_transport import StreamingASGITransport
 
-
-# Mock client store for testing
-class MockClientStore:
+# Mock OAuth provider for testing
+class MockOAuthProvider(OAuthServerProvider):
     def __init__(self):
         self.clients = {}
+        self.auth_codes = {}  # code -> {client_id, code_challenge, redirect_uri}
+        self.tokens = {}  # token -> {client_id, scopes, expires_at}
+        self.refresh_tokens = {}  # refresh_token -> access_token
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         return self.clients.get(client_id)
 
     async def register_client(self, client_info: OAuthClientInformationFull):
         self.clients[client_info.client_id] = client_info
-
-
-# Mock OAuth provider for testing
-class MockOAuthProvider(OAuthServerProvider):
-    def __init__(self):
-        self.client_store = MockClientStore()
-        self.auth_codes = {}  # code -> {client_id, code_challenge, redirect_uri}
-        self.tokens = {}  # token -> {client_id, scopes, expires_at}
-        self.refresh_tokens = {}  # refresh_token -> access_token
-
-    @property
-    def clients_store(self) -> OAuthRegisteredClientsStore:
-        return self.client_store
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
@@ -972,7 +960,7 @@ class TestAuthEndpoints:
         assert client_info["scope"] == "read write"
 
         # Retrieve the client from the store to verify default scopes
-        registered_client = await mock_oauth_provider.clients_store.get_client(
+        registered_client = await mock_oauth_provider.get_client(
             client_info["client_id"]
         )
         assert registered_client is not None

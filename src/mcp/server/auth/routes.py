@@ -65,7 +65,7 @@ def create_auth_routes(
         client_registration_options,
         revocation_options,
     )
-    client_authenticator = ClientAuthenticator(provider.clients_store)
+    client_authenticator = ClientAuthenticator(provider)
 
     # Create routes
     routes = [
@@ -88,7 +88,7 @@ def create_auth_routes(
 
     if client_registration_options.enabled:
         registration_handler = RegistrationHandler(
-            provider.clients_store,
+            provider,
             options=client_registration_options,
         )
         routes.append(

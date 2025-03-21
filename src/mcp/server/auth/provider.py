@@ -1,4 +1,5 @@
-from typing import Generic, Protocol, TypeVar
+from dataclasses import dataclass
+from typing import Generic, Literal, Protocol, TypeVar
 from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, BaseModel
@@ -39,10 +40,69 @@ class AuthInfo(BaseModel):
     expires_at: int | None = None
 
 
-class OAuthRegisteredClientsStore(Protocol):
+RegistrationErrorCode = Literal[
+    "invalid_redirect_uri",
+    "invalid_client_metadata",
+    "invalid_software_statement",
+    "unapproved_software_statement",
+]
+
+
+@dataclass(frozen=True)
+class RegistrationError(Exception):
+    error: RegistrationErrorCode
+    error_description: str | None = None
+
+
+AuthorizationErrorCode = Literal[
+    "invalid_request",
+    "unauthorized_client",
+    "access_denied",
+    "unsupported_response_type",
+    "invalid_scope",
+    "server_error",
+    "temporarily_unavailable",
+]
+
+
+@dataclass(frozen=True)
+class AuthorizeError(Exception):
+    error: AuthorizationErrorCode
+    error_description: str | None = None
+
+
+TokenErrorCode = Literal[
+    "invalid_request",
+    "invalid_client",
+    "invalid_grant",
+    "unauthorized_client",
+    "unsupported_grant_type",
+    "invalid_scope",
+]
+
+
+@dataclass(frozen=True)
+class TokenError(Exception):
+    error: TokenErrorCode
+    error_description: str | None = None
+
+
+# NOTE: FastMCP doesn't render any of these types in the user response, so it's
+# OK to add fields to subclasses which should not be exposed externally.
+AuthorizationCodeT = TypeVar("AuthorizationCodeT", bound=AuthorizationCode)
+RefreshTokenT = TypeVar("RefreshTokenT", bound=RefreshToken)
+AuthInfoT = TypeVar("AuthInfoT", bound=AuthInfo)
+
+
+class OAuthServerProvider(
+    Protocol, Generic[AuthorizationCodeT, RefreshTokenT, AuthInfoT]
+):
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """
         Retrieves client information by client ID.
+
+        Implementors MAY raise NotImplementedError if dynamic client registration is
+        disabled in ClientRegistrationOptions.
 
         Args:
             client_id: The ID of the client to retrieve.
@@ -56,26 +116,14 @@ class OAuthRegisteredClientsStore(Protocol):
         """
         Saves client information as part of registering it.
 
+        Implementors MAY raise NotImplementedError if dynamic client registration is
+        disabled in ClientRegistrationOptions.
+
         Args:
             client_info: The client metadata to register.
-        """
-        ...
 
-
-# NOTE: FastMCP doesn't render any of these types in the user response, so it's
-# OK to add fields to subclasses which should not be exposed externally.
-AuthorizationCodeT = TypeVar("AuthorizationCodeT", bound=AuthorizationCode)
-RefreshTokenT = TypeVar("RefreshTokenT", bound=RefreshToken)
-AuthInfoT = TypeVar("AuthInfoT", bound=AuthInfo)
-
-
-class OAuthServerProvider(
-    Protocol, Generic[AuthorizationCodeT, RefreshTokenT, AuthInfoT]
-):
-    @property
-    def clients_store(self) -> OAuthRegisteredClientsStore:
-        """
-        A store used to read information about registered OAuth clients.
+        Raises:
+            RegistrationError: If the client metadata is invalid.
         """
         ...
 
@@ -111,6 +159,16 @@ class OAuthServerProvider(
         entropy,
         and MUST generate an authorization code with at least 128 bits of entropy.
         See https://datatracker.ietf.org/doc/html/rfc6749#section-10.10.
+
+        Args:
+            client: The client requesting authorization.
+            params: The parameters of the authorization request.
+
+        Returns:
+            A URL to redirect the client to for authorization.
+
+        Raises:
+            AuthorizeError: If the authorization request is invalid.
         """
         ...
 
@@ -118,14 +176,14 @@ class OAuthServerProvider(
         self, client: OAuthClientInformationFull, authorization_code: str
     ) -> AuthorizationCodeT | None:
         """
-        Loads metadata for the authorization code challenge.
+        Loads an AuthorizationCode by its code.
 
         Args:
             client: The client that requested the authorization code.
             authorization_code: The authorization code to get the challenge for.
 
         Returns:
-            The code challenge that was used when the authorization began.
+            The AuthorizationCode, or None if not found
         """
         ...
 
@@ -133,20 +191,35 @@ class OAuthServerProvider(
         self, client: OAuthClientInformationFull, authorization_code: AuthorizationCodeT
     ) -> OAuthToken:
         """
-        Exchanges an authorization code for an access token.
+        Exchanges an authorization code for an access token and refresh token.
 
         Args:
             client: The client exchanging the authorization code.
             authorization_code: The authorization code to exchange.
 
         Returns:
-            The access and refresh tokens.
+            The OAuth token, containing access and refresh tokens.
+
+        Raises:
+            TokenError: If the request is invalid
         """
         ...
 
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
-    ) -> RefreshTokenT | None: ...
+    ) -> RefreshTokenT | None:
+        """
+        Loads a RefreshToken by its token string.
+
+        Args:
+            client: The client that is requesting to load the refresh token.
+            refresh_token: The refresh token string to load.
+
+        Returns:
+            The RefreshToken object if found, or None if not found.
+        """
+
+    ...
 
     async def exchange_refresh_token(
         self,
@@ -155,7 +228,9 @@ class OAuthServerProvider(
         scopes: list[str],
     ) -> OAuthToken:
         """
-        Exchanges a refresh token for an access token.
+        Exchanges a refresh token for an access token and refresh token.
+
+        Implementations SHOULD rotate both the access token and refresh token.
 
         Args:
             client: The client exchanging the refresh token.
@@ -163,19 +238,22 @@ class OAuthServerProvider(
             scopes: Optional scopes to request with the new access token.
 
         Returns:
-            The new access and refresh tokens.
+            The OAuth token, containing access and refresh tokens.
+
+        Raises:
+            TokenError: If the request is invalid
         """
         ...
 
     async def load_access_token(self, token: str) -> AuthInfoT | None:
         """
-        Verifies an access token and returns information about it.
+        Loads an access token by its token.
 
         Args:
             token: The access token to verify.
 
         Returns:
-            Information about the verified token, or None if the token is invalid.
+            The AuthInfo, or None if the token is invalid.
         """
         ...
 
@@ -188,11 +266,12 @@ class OAuthServerProvider(
 
         If the given token is invalid or already revoked, this method should do nothing.
 
+        Implementations SHOULD revoke both the access token and its corresponding
+        refresh token, regardless of which of the access token or refresh token is
+        provided.
+
         Args:
             token: the token to revoke
-            token_type_hint: hint about the type of token to revoke; optional. if the
-            token cannot be located using this hint, the provider MUST extend its search
-            to include all tokens.
         """
         ...
 

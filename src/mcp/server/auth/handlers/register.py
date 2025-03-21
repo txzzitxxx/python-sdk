@@ -1,7 +1,6 @@
 import secrets
 import time
 from dataclasses import dataclass
-from typing import Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, RootModel, ValidationError
@@ -10,7 +9,11 @@ from starlette.responses import Response
 
 from mcp.server.auth.errors import stringify_pydantic_error
 from mcp.server.auth.json_response import PydanticJSONResponse
-from mcp.server.auth.provider import OAuthRegisteredClientsStore
+from mcp.server.auth.provider import (
+    OAuthServerProvider,
+    RegistrationError,
+    RegistrationErrorCode,
+)
 from mcp.server.auth.settings import ClientRegistrationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
 
@@ -22,18 +25,13 @@ class RegistrationRequest(RootModel):
 
 
 class RegistrationErrorResponse(BaseModel):
-    error: Literal[
-        "invalid_redirect_uri",
-        "invalid_client_metadata",
-        "invalid_software_statement",
-        "unapproved_software_statement",
-    ]
-    error_description: str
+    error: RegistrationErrorCode
+    error_description: str | None
 
 
 @dataclass
 class RegistrationHandler:
-    clients_store: OAuthRegisteredClientsStore
+    provider: OAuthServerProvider
     options: ClientRegistrationOptions
 
     async def handle(self, request: Request) -> Response:
@@ -116,8 +114,17 @@ class RegistrationHandler:
             software_id=client_metadata.software_id,
             software_version=client_metadata.software_version,
         )
-        # Register client
-        await self.clients_store.register_client(client_info)
+        try:
+            # Register client
+            await self.provider.register_client(client_info)
 
-        # Return client information
-        return PydanticJSONResponse(content=client_info, status_code=201)
+            # Return client information
+            return PydanticJSONResponse(content=client_info, status_code=201)
+        except RegistrationError as e:
+            # Handle registration errors as defined in RFC 7591 Section 3.2.2
+            return PydanticJSONResponse(
+                content=RegistrationErrorResponse(
+                    error=e.error, error_description=e.error_description
+                ),
+                status_code=400,
+            )

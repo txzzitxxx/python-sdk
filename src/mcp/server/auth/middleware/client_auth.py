@@ -1,6 +1,6 @@
 import time
 
-from mcp.server.auth.provider import OAuthRegisteredClientsStore
+from mcp.server.auth.provider import OAuthServerProvider
 from mcp.shared.auth import OAuthClientInformationFull
 
 
@@ -20,20 +20,20 @@ class ClientAuthenticator:
     logic is skipped.
     """
 
-    def __init__(self, clients_store: OAuthRegisteredClientsStore):
+    def __init__(self, provider: OAuthServerProvider):
         """
         Initialize the dependency.
 
         Args:
-            clients_store: Store to look up client information
+            provider: Provider to look up client information
         """
-        self.clients_store = clients_store
+        self.provider = provider
 
     async def authenticate(
         self, client_id: str, client_secret: str | None
     ) -> OAuthClientInformationFull:
         # Look up client information
-        client = await self.clients_store.get_client(client_id)
+        client = await self.provider.get_client(client_id)
         if not client:
             raise AuthenticationError("Invalid client_id")
 

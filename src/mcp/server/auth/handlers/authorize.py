@@ -14,7 +14,9 @@ from mcp.server.auth.errors import (
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.provider import (
+    AuthorizationErrorCode,
     AuthorizationParams,
+    AuthorizeError,
     OAuthServerProvider,
     construct_redirect_uri,
 )
@@ -49,20 +51,9 @@ class AuthorizationRequest(BaseModel):
     )
 
 
-AuthorizationErrorCode = Literal[
-    "invalid_request",
-    "unauthorized_client",
-    "access_denied",
-    "unsupported_response_type",
-    "invalid_scope",
-    "server_error",
-    "temporarily_unavailable",
-]
-
-
 class AuthorizationErrorResponse(BaseModel):
     error: AuthorizationErrorCode
-    error_description: str
+    error_description: str | None
     error_uri: AnyUrl | None = None
     # must be set if provided in the request
     state: str | None = None
@@ -98,16 +89,14 @@ class AuthorizationHandler:
 
         async def error_response(
             error: AuthorizationErrorCode,
-            error_description: str,
+            error_description: str | None,
             attempt_load_client: bool = True,
         ):
             nonlocal client, redirect_uri, state
             if client is None and attempt_load_client:
                 # make last-ditch attempt to load the client
                 client_id = best_effort_extract_string("client_id", params)
-                client = client_id and await self.provider.clients_store.get_client(
-                    client_id
-                )
+                client = client_id and await self.provider.get_client(client_id)
             if redirect_uri is None and client:
                 # make last-ditch effort to load the redirect uri
                 if params is not None and "redirect_uri" not in params:
@@ -171,7 +160,7 @@ class AuthorizationHandler:
                 )
 
             # Get client information
-            client = await self.provider.clients_store.get_client(
+            client = await self.provider.get_client(
                 auth_request.client_id,
             )
             if not client:
@@ -210,15 +199,22 @@ class AuthorizationHandler:
                 redirect_uri=redirect_uri,
             )
 
-            # Let the provider pick the next URI to redirect to
-            return RedirectResponse(
-                url=await self.provider.authorize(
-                    client,
-                    auth_params,
-                ),
-                status_code=302,
-                headers={"Cache-Control": "no-store"},
-            )
+            try:
+                # Let the provider pick the next URI to redirect to
+                return RedirectResponse(
+                    url=await self.provider.authorize(
+                        client,
+                        auth_params,
+                    ),
+                    status_code=302,
+                    headers={"Cache-Control": "no-store"},
+                )
+            except AuthorizeError as e:
+                # Handle authorization errors as defined in RFC 6749 Section 4.1.2.1
+                return await error_response(
+                    error=e.error,
+                    error_description=e.error_description,
+                )
 
         except Exception as validation_error:
             # Catch-all for unexpected errors

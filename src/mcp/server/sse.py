@@ -44,7 +44,6 @@ from sse_starlette import EventSourceResponse
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
-from typing_extensions import deprecated
 
 import mcp.types as types
 

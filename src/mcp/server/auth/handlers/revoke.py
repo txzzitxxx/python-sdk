@@ -81,8 +81,10 @@ class RevocationHandler:
             if token is not None:
                 break
 
+        # if token is not found, just return HTTP 200 per the RFC
         if token and token.client_id == client.client_id:
-            # Revoke token
+            # Revoke token; provider is not meant to be able to do validation
+            # at this point that would result in an error
             await self.provider.revoke_token(token)
 
         # Return successful empty response
