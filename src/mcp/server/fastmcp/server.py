@@ -5,13 +5,13 @@ from __future__ import annotations as _annotations
 import inspect
 import json
 import re
-from collections.abc import AsyncIterator, Iterable
+from collections.abc import AsyncIterator, Callable, Iterable, Sequence
 from contextlib import (
     AbstractAsyncContextManager,
     asynccontextmanager,
 )
 from itertools import chain
-from typing import Any, Awaitable, Callable, Generic, Literal, Sequence
+from typing import Any, Awaitable, Generic, Literal
 
 import anyio
 import pydantic_core
@@ -23,6 +23,10 @@ from sse_starlette import EventSourceResponse
 from starlette.applications import Starlette
 from starlette.authentication import requires
 from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.middleware import Middleware
+from starlette.routing import Mount, Route
 
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import (
@@ -80,11 +84,13 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
 
     # Server settings
     debug: bool = False
-    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "INFO"
+    log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"] = "ERROR"
 
     # HTTP settings
     host: str = "0.0.0.0"
     port: int = 8000
+    sse_path: str = "/sse"
+    message_path: str = "/messages/"
 
     # resource settings
     warn_on_duplicate_resources: bool = True
@@ -101,7 +107,7 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
     )
 
     lifespan: (
-        Callable[["FastMCP"], AbstractAsyncContextManager[LifespanResultT]] | None
+        Callable[[FastMCP], AbstractAsyncContextManager[LifespanResultT]] | None
     ) = Field(None, description="Lifespan context manager")
 
     auth: AuthSettings | None = None
@@ -109,7 +115,7 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
 
 def lifespan_wrapper(
     app: FastMCP,
-    lifespan: Callable[["FastMCP"], AbstractAsyncContextManager[LifespanResultT]],
+    lifespan: Callable[[FastMCP], AbstractAsyncContextManager[LifespanResultT]],
 ) -> Callable[[MCPServer[LifespanResultT]], AbstractAsyncContextManager[object]]:
     @asynccontextmanager
     async def wrap(s: MCPServer[LifespanResultT]) -> AsyncIterator[object]:
@@ -124,7 +130,7 @@ class FastMCP:
         self,
         name: str | None = None,
         instructions: str | None = None,
-        auth_provider: OAuthServerProvider | None = None,
+        auth_provider: OAuthServerProvider[Any, Any, Any] | None = None,
         **settings: Any,
     ):
         self.settings = Settings(**settings)
@@ -151,7 +157,7 @@ class FastMCP:
                 "is specified"
             )
         self._auth_provider = auth_provider
-        self._custom_starlette_routes = []
+        self._custom_starlette_routes: list[Route] = []
         self.dependencies = self.settings.dependencies
 
         # Set up MCP protocol handlers
@@ -205,7 +211,7 @@ class FastMCP:
             for info in tools
         ]
 
-    def get_context(self) -> "Context[ServerSession, object]":
+    def get_context(self) -> Context[ServerSession, object]:
         """
         Returns a Context object. Note that the context will only be valid
         during a request; outside a request, most methods will error.
@@ -485,9 +491,6 @@ class FastMCP:
         name: str | None = None,
         include_in_schema: bool = True,
     ):
-        from starlette.requests import Request
-        from starlette.responses import Response
-        from starlette.routing import Route
 
         def decorator(
             func: Callable[[Request], Awaitable[Response]],
@@ -514,21 +517,31 @@ class FastMCP:
                 self._mcp_server.create_initialization_options(),
             )
 
-    def starlette_app(self) -> Starlette:
-        """Run the server using SSE transport."""
-        from starlette.applications import Starlette
+    async def run_sse_async(self) -> None:
+        config = uvicorn.Config(
+            app=self.sse_app(),
+            host=self.settings.host,
+            port=self.settings.port,
+            log_level=self.settings.log_level.lower(),
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
+
+    def sse_app(self) -> Starlette:
         from starlette.middleware import Middleware
         from starlette.routing import Mount, Route
 
         # Set up auth context and dependencies
 
-        sse = SseServerTransport("/messages/")
+        sse = SseServerTransport(self.settings.message_path)
 
-        async def handle_sse(request) -> EventSourceResponse:
+        async def handle_sse(request: Request) -> EventSourceResponse:
             # Add client ID from auth context into request context if available
 
             async with sse.connect_sse(
-                request.scope, request.receive, request._send
+                request.scope,
+                request.receive,
+                request._send # type: ignore[reportPrivateUsage]
             ) as streams:
                 await self._mcp_server.run(
                     streams[0],
@@ -538,8 +551,8 @@ class FastMCP:
                 return streams[2]
 
         # Create routes
-        routes = []
-        middleware = []
+        routes: list[Route | Mount] = []
+        middleware: list[Middleware] = []
         required_scopes = []
 
         # Add auth endpoints if auth provider is configured
@@ -573,12 +586,12 @@ class FastMCP:
 
         routes.append(
             Route(
-                "/sse", endpoint=requires(required_scopes)(handle_sse), methods=["GET"]
+                self.settings.sse_path, endpoint=requires(required_scopes)(handle_sse), methods=["GET"]
             )
         )
         routes.append(
             Mount(
-                "/messages/",
+                self.settings.message_path,
                 app=RequireAuthMiddleware(sse.handle_post_message, required_scopes),
             )
         )
@@ -589,16 +602,6 @@ class FastMCP:
         return Starlette(
             debug=self.settings.debug, routes=routes, middleware=middleware
         )
-
-    async def run_sse_async(self) -> None:
-        config = uvicorn.Config(
-            app=self.starlette_app(),
-            host=self.settings.host,
-            port=self.settings.port,
-            log_level=self.settings.log_level.lower(),
-        )
-        server = uvicorn.Server(config)
-        await server.serve()
 
     async def list_prompts(self) -> list[MCPPrompt]:
         """List all available prompts."""
@@ -639,14 +642,14 @@ def _convert_to_content(
     if result is None:
         return []
 
-    if isinstance(result, (TextContent, ImageContent, EmbeddedResource)):
+    if isinstance(result, TextContent | ImageContent | EmbeddedResource):
         return [result]
 
     if isinstance(result, Image):
         return [result.to_image_content()]
 
-    if isinstance(result, (list, tuple)):
-        return list(chain.from_iterable(_convert_to_content(item) for item in result))
+    if isinstance(result, list | tuple):
+        return list(chain.from_iterable(_convert_to_content(item) for item in result))  # type: ignore[reportUnknownVariableType]
 
     if not isinstance(result, str):
         try:
@@ -751,9 +754,9 @@ class Context(BaseModel, Generic[ServerSessionT, LifespanContextT]):
         Returns:
             The resource content as either text or bytes
         """
-        assert (
-            self._fastmcp is not None
-        ), "Context is not available outside of a request"
+        assert self._fastmcp is not None, (
+            "Context is not available outside of a request"
+        )
         return await self._fastmcp.read_resource(uri)
 
     async def log(

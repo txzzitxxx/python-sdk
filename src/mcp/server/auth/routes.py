@@ -1,4 +1,4 @@
-from typing import Callable
+from typing import Any, Callable
 
 from pydantic import AnyHttpUrl
 from starlette.routing import Route
@@ -29,7 +29,7 @@ def validate_issuer_url(url: AnyHttpUrl):
     if (
         url.scheme != "https"
         and url.host != "localhost"
-        and not (url.host is not None and url.host.startswith("127.0.0.1"))
+        and not url.host.startswith("127.0.0.1")
     ):
         raise ValueError("Issuer URL must be HTTPS")
 
@@ -47,7 +47,7 @@ REVOCATION_PATH = "/revoke"
 
 
 def create_auth_routes(
-    provider: OAuthServerProvider,
+    provider: OAuthServerProvider[Any, Any, Any],
     issuer_url: AnyHttpUrl,
     service_documentation_url: AnyHttpUrl | None = None,
     client_registration_options: ClientRegistrationOptions | None = None,

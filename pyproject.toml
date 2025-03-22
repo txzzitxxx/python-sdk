@@ -1,6 +1,6 @@
 [project]
 name = "mcp"
-version = "1.4.0.dev0"
+dynamic = ["version"]
 description = "Model Context Protocol SDK"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -48,11 +48,20 @@ dev-dependencies = [
     "ruff>=0.8.5",
     "trio>=0.26.2",
     "pytest-xdist>=3.6.1",
+    "pytest-examples>=0.0.14",
 ]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "uv-dynamic-versioning"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "uv-dynamic-versioning"
+
+[tool.uv-dynamic-versioning]
+vcs = "git"
+style = "pep440"
+bump = true
 
 [project.urls]
 Homepage = "https://modelcontextprotocol.io"
@@ -66,12 +75,11 @@ packages = ["src/mcp"]
 include = ["src/mcp", "tests"]
 venvPath = "."
 venv = ".venv"
-strict = [
-    "src/mcp/server/fastmcp/tools/base.py",
-]
+strict = ["src/mcp/**/*.py"]
+exclude = ["src/mcp/types.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I"]
+select = ["E", "F", "I", "UP"]
 ignore = []
 
 [tool.ruff]
