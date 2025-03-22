@@ -5,13 +5,13 @@ from __future__ import annotations as _annotations
 import inspect
 import json
 import re
-from collections.abc import AsyncIterator, Callable, Iterable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterable, Sequence
 from contextlib import (
     AbstractAsyncContextManager,
     asynccontextmanager,
 )
 from itertools import chain
-from typing import Any, Awaitable, Generic, Literal
+from typing import Any, Generic, Literal
 
 import anyio
 import pydantic_core
@@ -22,10 +22,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from sse_starlette import EventSourceResponse
 from starlette.applications import Starlette
 from starlette.authentication import requires
+from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.middleware import Middleware
 from starlette.routing import Mount, Route
 
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
@@ -491,7 +491,6 @@ class FastMCP:
         name: str | None = None,
         include_in_schema: bool = True,
     ):
-
         def decorator(
             func: Callable[[Request], Awaitable[Response]],
         ) -> Callable[[Request], Awaitable[Response]]:
@@ -541,7 +540,7 @@ class FastMCP:
             async with sse.connect_sse(
                 request.scope,
                 request.receive,
-                request._send # type: ignore[reportPrivateUsage]
+                request._send,  # type: ignore[reportPrivateUsage]
             ) as streams:
                 await self._mcp_server.run(
                     streams[0],
@@ -586,7 +585,9 @@ class FastMCP:
 
         routes.append(
             Route(
-                self.settings.sse_path, endpoint=requires(required_scopes)(handle_sse), methods=["GET"]
+                self.settings.sse_path,
+                endpoint=requires(required_scopes)(handle_sse),
+                methods=["GET"],
             )
         )
         routes.append(
@@ -754,9 +755,9 @@ class Context(BaseModel, Generic[ServerSessionT, LifespanContextT]):
         Returns:
             The resource content as either text or bytes
         """
-        assert self._fastmcp is not None, (
-            "Context is not available outside of a request"
-        )
+        assert (
+            self._fastmcp is not None
+        ), "Context is not available outside of a request"
         return await self._fastmcp.read_resource(uri)
 
     async def log(

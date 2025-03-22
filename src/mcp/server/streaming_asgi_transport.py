@@ -9,7 +9,7 @@ This is only intended for writing tests for the SSE transport.
 """
 
 import typing
-from typing import Any, Dict, Tuple
+from typing import Any, cast
 
 import anyio
 import anyio.abc
@@ -17,6 +17,7 @@ import anyio.streams.memory
 from httpx._models import Request, Response
 from httpx._transports.base import AsyncBaseTransport
 from httpx._types import AsyncByteStream
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 
 class StreamingASGITransport(AsyncBaseTransport):
@@ -42,11 +43,11 @@ class StreamingASGITransport(AsyncBaseTransport):
 
     def __init__(
         self,
-        app: typing.Callable,
+        app: ASGIApp,
         task_group: anyio.abc.TaskGroup,
         raise_app_exceptions: bool = True,
         root_path: str = "",
-        client: Tuple[str, int] = ("127.0.0.1", 123),
+        client: tuple[str, int] = ("127.0.0.1", 123),
     ) -> None:
         self.app = app
         self.raise_app_exceptions = raise_app_exceptions
@@ -88,13 +89,15 @@ class StreamingASGITransport(AsyncBaseTransport):
         initial_response_ready = anyio.Event()
 
         # Synchronization for streaming response
-        asgi_send_channel, asgi_receive_channel = anyio.create_memory_object_stream(100)
+        asgi_send_channel, asgi_receive_channel = anyio.create_memory_object_stream[
+            dict[str, Any]
+        ](100)
         content_send_channel, content_receive_channel = (
             anyio.create_memory_object_stream[bytes](100)
         )
 
         # ASGI callables.
-        async def receive() -> Dict[str, Any]:
+        async def receive() -> dict[str, Any]:
             nonlocal request_complete
 
             if request_complete:
@@ -108,7 +111,7 @@ class StreamingASGITransport(AsyncBaseTransport):
                 return {"type": "http.request", "body": b"", "more_body": False}
             return {"type": "http.request", "body": body, "more_body": True}
 
-        async def send(message: Dict[str, Any]) -> None:
+        async def send(message: dict[str, Any]) -> None:
             nonlocal status_code, response_headers, response_started
 
             await asgi_send_channel.send(message)
@@ -116,7 +119,10 @@ class StreamingASGITransport(AsyncBaseTransport):
         # Start the ASGI application in a separate task
         async def run_app() -> None:
             try:
-                await self.app(scope, receive, send)
+                # Cast the receive and send functions to the ASGI types
+                await self.app(
+                    cast(Scope, scope), cast(Receive, receive), cast(Send, send)
+                )
             except Exception:
                 if self.raise_app_exceptions:
                     raise

@@ -1,6 +1,7 @@
 import secrets
 import time
 from dataclasses import dataclass
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, RootModel, ValidationError
@@ -18,7 +19,7 @@ from mcp.server.auth.settings import ClientRegistrationOptions
 from mcp.shared.auth import OAuthClientInformationFull, OAuthClientMetadata
 
 
-class RegistrationRequest(RootModel):
+class RegistrationRequest(RootModel[OAuthClientMetadata]):
     # this wrapper is a no-op; it's just to separate out the types exposed to the
     # provider from what we use in the HTTP handler
     root: OAuthClientMetadata
@@ -31,7 +32,7 @@ class RegistrationErrorResponse(BaseModel):
 
 @dataclass
 class RegistrationHandler:
-    provider: OAuthServerProvider
+    provider: OAuthServerProvider[Any, Any, Any]
     options: ClientRegistrationOptions
 
     async def handle(self, request: Request) -> Response:

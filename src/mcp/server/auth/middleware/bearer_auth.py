@@ -1,5 +1,5 @@
 import time
-from typing import Any, Callable
+from typing import Any
 
 from starlette.authentication import (
     AuthCredentials,
@@ -8,7 +8,7 @@ from starlette.authentication import (
 )
 from starlette.exceptions import HTTPException
 from starlette.requests import HTTPConnection
-from starlette.types import Scope
+from starlette.types import Receive, Scope, Send
 
 from mcp.server.auth.provider import AccessToken, OAuthServerProvider
 
@@ -29,7 +29,7 @@ class BearerAuthBackend(AuthenticationBackend):
 
     def __init__(
         self,
-        provider: OAuthServerProvider,
+        provider: OAuthServerProvider[Any, Any, Any],
     ):
         self.provider = provider
 
@@ -72,7 +72,7 @@ class RequireAuthMiddleware:
         self.app = app
         self.required_scopes = required_scopes
 
-    async def __call__(self, scope: Scope, receive: Callable, send: Callable) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         auth_credentials = scope.get("auth")
 
         for required_scope in self.required_scopes:

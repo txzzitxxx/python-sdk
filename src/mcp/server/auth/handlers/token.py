@@ -2,7 +2,7 @@ import base64
 import hashlib
 import time
 from dataclasses import dataclass
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import AnyHttpUrl, BaseModel, Field, RootModel, ValidationError
 from starlette.requests import Request
@@ -44,7 +44,14 @@ class RefreshTokenRequest(BaseModel):
     client_secret: str | None = None
 
 
-class TokenRequest(RootModel):
+class TokenRequest(
+    RootModel[
+        Annotated[
+            AuthorizationCodeRequest | RefreshTokenRequest,
+            Field(discriminator="grant_type"),
+        ]
+    ]
+):
     root: Annotated[
         AuthorizationCodeRequest | RefreshTokenRequest,
         Field(discriminator="grant_type"),
@@ -61,7 +68,7 @@ class TokenErrorResponse(BaseModel):
     error_uri: AnyHttpUrl | None = None
 
 
-class TokenSuccessResponse(RootModel):
+class TokenSuccessResponse(RootModel[OAuthToken]):
     # this is just a wrapper over OAuthToken; the only reason we do this
     # is to have some separation between the HTTP response type, and the
     # type returned by the provider
@@ -70,7 +77,7 @@ class TokenSuccessResponse(RootModel):
 
 @dataclass
 class TokenHandler:
-    provider: OAuthServerProvider
+    provider: OAuthServerProvider[Any, Any, Any]
     client_authenticator: ClientAuthenticator
 
     def response(self, obj: TokenSuccessResponse | TokenErrorResponse | ErrorResponse):

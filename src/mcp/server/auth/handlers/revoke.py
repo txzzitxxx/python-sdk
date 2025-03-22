@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import partial
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ValidationError
 from starlette.requests import Request
@@ -35,7 +35,7 @@ class RevocationErrorResponse(BaseModel):
 
 @dataclass
 class RevocationHandler:
-    provider: OAuthServerProvider
+    provider: OAuthServerProvider[Any, Any, Any]
     client_authenticator: ClientAuthenticator
 
     async def handle(self, request: Request) -> Response:

@@ -1019,7 +1019,7 @@ class TestFastMCPWithAuth:
 
         async with anyio.create_task_group() as task_group:
             transport = StreamingASGITransport(
-                app=mcp.starlette_app(),
+                app=mcp.sse_app(),
                 task_group=task_group,
             )
             test_client = httpx.AsyncClient(

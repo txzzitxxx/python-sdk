@@ -1,6 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Union
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import anyio
@@ -26,7 +26,7 @@ async def sse_client(
     headers: dict[str, Any] | None = None,
     timeout: float = 5,
     sse_read_timeout: float = 60 * 5,
-    auth: Union[AuthSession, OAuthClient, None] = None,
+    auth: AuthSession | OAuthClient | None = None,
 ):
     """
     Client transport for SSE.

@@ -1,6 +1,6 @@
 import logging
 from dataclasses import dataclass
-from typing import Literal
+from typing import Any, Literal
 from urllib.parse import urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, AnyUrl, BaseModel, Field, RootModel, ValidationError
@@ -70,13 +70,13 @@ def best_effort_extract_string(
     return None
 
 
-class AnyHttpUrlModel(RootModel):
+class AnyHttpUrlModel(RootModel[AnyHttpUrl]):
     root: AnyHttpUrl
 
 
 @dataclass
 class AuthorizationHandler:
-    provider: OAuthServerProvider
+    provider: OAuthServerProvider[Any, Any, Any]
 
     async def handle(self, request: Request) -> Response:
         # implements authorization requests for grant_type=code;
