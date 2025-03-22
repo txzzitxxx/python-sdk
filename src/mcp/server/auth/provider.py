@@ -91,11 +91,11 @@ class TokenError(Exception):
 # OK to add fields to subclasses which should not be exposed externally.
 AuthorizationCodeT = TypeVar("AuthorizationCodeT", bound=AuthorizationCode)
 RefreshTokenT = TypeVar("RefreshTokenT", bound=RefreshToken)
-AuthInfoT = TypeVar("AuthInfoT", bound=AccessToken)
+AccessTokenT = TypeVar("AccessTokenT", bound=AccessToken)
 
 
 class OAuthServerProvider(
-    Protocol, Generic[AuthorizationCodeT, RefreshTokenT, AuthInfoT]
+    Protocol, Generic[AuthorizationCodeT, RefreshTokenT, AccessTokenT]
 ):
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """
@@ -245,7 +245,7 @@ class OAuthServerProvider(
         """
         ...
 
-    async def load_access_token(self, token: str) -> AuthInfoT | None:
+    async def load_access_token(self, token: str) -> AccessTokenT | None:
         """
         Loads an access token by its token.
 
@@ -259,7 +259,7 @@ class OAuthServerProvider(
 
     async def revoke_token(
         self,
-        token: AuthInfoT | RefreshTokenT,
+        token: AccessTokenT | RefreshTokenT,
     ) -> None:
         """
         Revokes an access or refresh token.
