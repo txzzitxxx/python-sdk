@@ -21,7 +21,6 @@ from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from sse_starlette import EventSourceResponse
 from starlette.applications import Starlette
-from starlette.authentication import requires
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
@@ -586,7 +585,9 @@ class FastMCP:
         routes.append(
             Route(
                 self.settings.sse_path,
-                endpoint=RequireAuthMiddleware(request_response(handle_sse), required_scopes),
+                endpoint=RequireAuthMiddleware(
+                    request_response(handle_sse), required_scopes
+                ),
                 methods=["GET"],
             )
         )

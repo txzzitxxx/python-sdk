@@ -1,8 +1,6 @@
 import contextvars
 
-from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
-from starlette.responses import Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from mcp.server.auth.provider import AccessToken
@@ -25,7 +23,7 @@ def get_access_token() -> AccessToken | None:
     return auth_user.access_token if auth_user else None
 
 
-class AuthContextMiddleware(BaseHTTPMiddleware):
+class AuthContextMiddleware:
     """
     Middleware that extracts the authenticated user from the request
     and sets it in a contextvar for easy access throughout the request lifecycle.
@@ -35,23 +33,18 @@ class AuthContextMiddleware(BaseHTTPMiddleware):
     being stored in the context.
     """
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
-        # Get the authenticated user from the request if it exists
-        user = getattr(request, "user", None)
+    def __init__(self, app: ASGIApp):
+        self.app = app
 
-        # Only set the context var if the user is an AuthenticatedUser
+    async def __call__(self, scope: Scope, receive: Receive, send: Send):
+        user = scope.get("user")
         if isinstance(user, AuthenticatedUser):
             # Set the authenticated user in the contextvar
             token = auth_context_var.set(user)
             try:
-                # Process the request
-                response = await call_next(request)
-                return response
+                await self.app(scope, receive, send)
             finally:
-                # Reset the contextvar after the request is processed
                 auth_context_var.reset(token)
         else:
             # No authenticated user, just process the request
-            return await call_next(request)
+            await self.app(scope, receive, send)
