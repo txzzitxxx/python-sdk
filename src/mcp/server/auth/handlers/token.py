@@ -157,18 +157,18 @@ class TokenHandler:
                         )
                     )
 
-                # verify redirect_uri doesn't change between /authorize and /tokens
-                # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
-                if token_request.redirect_uri != auth_code.redirect_uri:
-                    return self.response(
-                        TokenErrorResponse(
-                            error="invalid_request",
-                            error_description=(
-                                "redirect_uri did not match the one "
-                                "used when creating auth code"
-                            ),
-                        )
-                    )
+                # # verify redirect_uri doesn't change between /authorize and /tokens
+                # # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
+                # if token_request.redirect_uri != auth_code.redirect_uri:
+                #     return self.response(
+                #         TokenErrorResponse(
+                #             error="invalid_request",
+                #             error_description=(
+                #                 "redirect_uri did not match the one "
+                #                 "used when creating auth code"
+                #             ),
+                #         )
+                #     )
 
                 # Verify PKCE code verifier
                 sha256 = hashlib.sha256(token_request.code_verifier.encode()).digest()
