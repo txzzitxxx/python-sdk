@@ -1,8 +1,12 @@
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from pydantic import AnyHttpUrl
-from starlette.routing import Route
+from starlette.middleware.cors import CORSMiddleware
+from starlette.requests import Request
+from starlette.responses import Response
+from starlette.routing import Route, request_response
+from starlette.types import ASGIApp
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
 from mcp.server.auth.handlers.metadata import MetadataHandler
@@ -47,6 +51,19 @@ REGISTRATION_PATH = "/register"
 REVOCATION_PATH = "/revoke"
 
 
+def cors_middleware(
+    handler: Callable[[Request], Response | Awaitable[Response]],
+    allow_methods: list[str],
+) -> ASGIApp:
+    cors_app = CORSMiddleware(
+        app=request_response(handler),
+        allow_origins="*",
+        allow_methods=allow_methods,
+        allow_headers=["mcp-protocol-version"],
+    )
+    return cors_app
+
+
 def create_auth_routes(
     provider: OAuthServerProvider[Any, Any, Any],
     issuer_url: AnyHttpUrl,
@@ -69,21 +86,32 @@ def create_auth_routes(
     client_authenticator = ClientAuthenticator(provider)
 
     # Create routes
+    # Allow CORS requests for endpoints meant to be hit by the OAuth client
+    # (with the client secret). This is intended to support things like MCP Inspector,
+    # where the client runs in a web browser.
     routes = [
         Route(
             "/.well-known/oauth-authorization-server",
-            endpoint=MetadataHandler(metadata).handle,
-            methods=["GET"],
+            endpoint=cors_middleware(
+                MetadataHandler(metadata).handle,
+                ["GET", "OPTIONS"],
+            ),
+            methods=["GET", "OPTIONS"],
         ),
         Route(
             AUTHORIZATION_PATH,
+            # do not allow CORS for authorization endpoint;
+            # clients should just redirect to this
             endpoint=AuthorizationHandler(provider).handle,
             methods=["GET", "POST"],
         ),
         Route(
             TOKEN_PATH,
-            endpoint=TokenHandler(provider, client_authenticator).handle,
-            methods=["POST"],
+            endpoint=cors_middleware(
+                TokenHandler(provider, client_authenticator).handle,
+                ["POST", "OPTIONS"],
+            ),
+            methods=["POST", "OPTIONS"],
         ),
     ]
 
@@ -95,15 +123,25 @@ def create_auth_routes(
         routes.append(
             Route(
                 REGISTRATION_PATH,
-                endpoint=registration_handler.handle,
-                methods=["POST"],
+                endpoint=cors_middleware(
+                    registration_handler.handle,
+                    ["POST", "OPTIONS"],
+                ),
+                methods=["POST", "OPTIONS"],
             )
         )
 
     if revocation_options.enabled:
         revocation_handler = RevocationHandler(provider, client_authenticator)
         routes.append(
-            Route(REVOCATION_PATH, endpoint=revocation_handler.handle, methods=["POST"])
+            Route(
+                REVOCATION_PATH,
+                endpoint=cors_middleware(
+                    revocation_handler.handle,
+                    ["POST", "OPTIONS"],
+                ),
+                methods=["POST", "OPTIONS"],
+            )
         )
 
     return routes

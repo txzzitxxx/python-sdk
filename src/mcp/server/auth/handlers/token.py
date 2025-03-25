@@ -158,7 +158,10 @@ class TokenHandler:
 
                 # verify redirect_uri doesn't change between /authorize and /tokens
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
-                authorize_request_redirect_uri = auth_code.redirect_uri if auth_code.redirect_uri_provided_explicitly else None
+                if auth_code.redirect_uri_provided_explicitly:
+                    authorize_request_redirect_uri = auth_code.redirect_uri
+                else:
+                    authorize_request_redirect_uri = None
                 if token_request.redirect_uri != authorize_request_redirect_uri:
                     return self.response(
                         TokenErrorResponse(
