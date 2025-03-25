@@ -25,7 +25,8 @@ class AuthorizationCodeRequest(BaseModel):
     grant_type: Literal["authorization_code"]
     code: str = Field(..., description="The authorization code")
     redirect_uri: AnyHttpUrl | None = Field(
-        ..., description="Must be the same as redirect URI provided in /authorize"
+        default=None, 
+        description="Must be the same as redirect URI provided in /authorize",
     )
     client_id: str
     # we use the client_secret param, per https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1

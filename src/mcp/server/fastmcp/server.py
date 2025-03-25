@@ -23,6 +23,7 @@ from sse_starlette import EventSourceResponse
 from starlette.applications import Starlette
 from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
+from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.routing import Mount, Route, request_response
@@ -559,8 +560,16 @@ class FastMCP:
             from mcp.server.auth.routes import create_auth_routes
 
             required_scopes = self.settings.auth.required_scopes or []
-
+            
             middleware = [
+                # Add CORS middleware to allow cross-origin requests
+                Middleware(
+                    CORSMiddleware,
+                    allow_origins=["*"],  # Allow any origin
+                    allow_methods=["GET", "POST", "OPTIONS"],
+                    allow_headers=["*"],
+                    allow_credentials=True,
+                ),
                 # extract auth info from request (but do not require it)
                 Middleware(
                     AuthenticationMiddleware,

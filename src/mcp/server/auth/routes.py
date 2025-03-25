@@ -2,7 +2,10 @@ from collections.abc import Callable
 from typing import Any
 
 from pydantic import AnyHttpUrl
+from starlette.middleware.cors import CORSMiddleware
 from starlette.routing import Route
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
 from mcp.server.auth.handlers.metadata import MetadataHandler
@@ -73,17 +76,17 @@ def create_auth_routes(
         Route(
             "/.well-known/oauth-authorization-server",
             endpoint=MetadataHandler(metadata).handle,
-            methods=["GET"],
+            methods=["GET", "OPTIONS"],
         ),
         Route(
             AUTHORIZATION_PATH,
             endpoint=AuthorizationHandler(provider).handle,
-            methods=["GET", "POST"],
+            methods=["GET", "POST", "OPTIONS"],
         ),
         Route(
             TOKEN_PATH,
             endpoint=TokenHandler(provider, client_authenticator).handle,
-            methods=["POST"],
+            methods=["POST", "OPTIONS"],
         ),
     ]
 
