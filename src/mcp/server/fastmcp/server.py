@@ -26,7 +26,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import Mount, Route
+from starlette.routing import Mount, Route, request_response
 
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import (
@@ -586,7 +586,7 @@ class FastMCP:
         routes.append(
             Route(
                 self.settings.sse_path,
-                endpoint=requires(required_scopes)(handle_sse),
+                endpoint=RequireAuthMiddleware(request_response(handle_sse), required_scopes),
                 methods=["GET"],
             )
         )

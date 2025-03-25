@@ -73,6 +73,9 @@ class RequireAuthMiddleware:
         self.required_scopes = required_scopes
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        auth_user = scope.get("user")
+        if not isinstance(auth_user, AuthenticatedUser):
+            raise HTTPException(status_code=401, detail="Unauthorized")
         auth_credentials = scope.get("auth")
 
         for required_scope in self.required_scopes:

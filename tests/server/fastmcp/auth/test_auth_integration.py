@@ -1008,7 +1008,7 @@ class TestFastMCPWithAuth:
                 issuer_url=AnyHttpUrl("https://auth.example.com"),
                 client_registration_options=ClientRegistrationOptions(enabled=True),
                 revocation_options=RevocationOptions(enabled=True),
-                required_scopes=["read"],
+                required_scopes=["read", "write"],
             ),
         )
 
@@ -1032,24 +1032,22 @@ class TestFastMCPWithAuth:
 
             # Test that auth is required for protected endpoints
             response = await test_client.get("/sse")
-            # TODO: we should return 401/403 depending on whether authn or authz fails
-            assert response.status_code == 403
+            assert response.status_code == 401
 
             response = await test_client.post("/messages/")
-            # TODO: we should return 401/403 depending on whether authn or authz fails
-            assert response.status_code == 403, response.content
+            assert response.status_code == 401, response.content
 
             response = await test_client.post(
                 "/messages/",
                 headers={"Authorization": "invalid"},
             )
-            assert response.status_code == 403
+            assert response.status_code == 401
 
             response = await test_client.post(
                 "/messages/",
                 headers={"Authorization": "Bearer invalid"},
             )
-            assert response.status_code == 403
+            assert response.status_code == 401
 
             # now, become authenticated and try to go through the flow again
             client_metadata = {
