@@ -25,7 +25,7 @@ class AuthorizationCodeRequest(BaseModel):
     grant_type: Literal["authorization_code"]
     code: str = Field(..., description="The authorization code")
     redirect_uri: AnyHttpUrl | None = Field(
-        ..., description="Must be the same as redirect URI provided in /authorize"
+        None, description="Must be the same as redirect URI provided in /authorize"
     )
     client_id: str
     # we use the client_secret param, per https://datatracker.ietf.org/doc/html/rfc6749#section-2.3.1
@@ -158,7 +158,8 @@ class TokenHandler:
 
                 # verify redirect_uri doesn't change between /authorize and /tokens
                 # see https://datatracker.ietf.org/doc/html/rfc6749#section-10.6
-                if token_request.redirect_uri != auth_code.redirect_uri:
+                authorize_request_redirect_uri = auth_code.redirect_uri if auth_code.redirect_uri_provided_explicitly else None
+                if token_request.redirect_uri != authorize_request_redirect_uri:
                     return self.response(
                         TokenErrorResponse(
                             error="invalid_request",

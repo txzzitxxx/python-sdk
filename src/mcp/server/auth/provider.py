@@ -11,10 +11,11 @@ from mcp.shared.auth import (
 
 
 class AuthorizationParams(BaseModel):
-    state: str | None = None
-    scopes: list[str] | None = None
+    state: str | None
+    scopes: list[str] | None
     code_challenge: str
     redirect_uri: AnyHttpUrl
+    redirect_uri_provided_explicitly: bool
 
 
 class AuthorizationCode(BaseModel):
@@ -24,6 +25,7 @@ class AuthorizationCode(BaseModel):
     client_id: str
     code_challenge: str
     redirect_uri: AnyHttpUrl
+    redirect_uri_provided_explicitly: bool
 
 
 class RefreshToken(BaseModel):

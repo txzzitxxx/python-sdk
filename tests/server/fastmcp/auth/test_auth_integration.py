@@ -64,6 +64,7 @@ class MockOAuthProvider(OAuthServerProvider):
             client_id=client.client_id,
             code_challenge=params.code_challenge,
             redirect_uri=params.redirect_uri,
+            redirect_uri_provided_explicitly=params.redirect_uri_provided_explicitly,
             expires_at=time.time() + 300,
             scopes=params.scopes or ["read", "write"],
         )

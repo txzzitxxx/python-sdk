@@ -197,6 +197,7 @@ class AuthorizationHandler:
                 scopes=scopes,
                 code_challenge=auth_request.code_challenge,
                 redirect_uri=redirect_uri,
+                redirect_uri_provided_explicitly=auth_request.redirect_uri is not None,
             )
 
             try:
