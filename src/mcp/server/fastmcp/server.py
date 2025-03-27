@@ -25,7 +25,7 @@ from starlette.middleware import Middleware
 from starlette.middleware.authentication import AuthenticationMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import Mount, Route, request_response
+from starlette.routing import Mount, Route, request_response  # type: ignore
 
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import (

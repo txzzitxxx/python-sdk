@@ -5,7 +5,7 @@ from pydantic import AnyHttpUrl
 from starlette.middleware.cors import CORSMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
-from starlette.routing import Route, request_response
+from starlette.routing import Route, request_response  # type: ignore
 from starlette.types import ASGIApp
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
