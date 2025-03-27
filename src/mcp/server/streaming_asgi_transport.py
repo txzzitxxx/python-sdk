@@ -39,6 +39,10 @@ class StreamingASGITransport(AsyncBaseTransport):
     * `client` - A two-tuple indicating the client IP and port of incoming requests.
     * `response_timeout` - Timeout in seconds to wait for the initial response.
        Default is 10 seconds.
+
+    TODO: https://github.com/encode/httpx/pull/3059 is adding something similar to
+    upstream httpx. When that merges, we should delete this & switch back to the
+    upstream implementation.
     """
 
     def __init__(
