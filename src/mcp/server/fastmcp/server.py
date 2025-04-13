@@ -490,6 +490,25 @@ class FastMCP:
         name: str | None = None,
         include_in_schema: bool = True,
     ):
+        """Decorator to register a custom HTTP route on the FastMCP server.
+
+        Allows adding arbitrary HTTP endpoints outside the standard MCP protocol,
+        which can be useful for OAuth callbacks, health checks, or admin APIs.
+        The handler function must be an async function that accepts a Starlette
+        Request and returns a Response.
+
+        Args:
+            path: URL path for the route (e.g., "/oauth/callback")
+            methods: List of HTTP methods to support (e.g., ["GET", "POST"])
+            name: Optional name for the route (used for URL reversing)
+            include_in_schema: Whether to include in OpenAPI schema, defaults to True
+
+        Example:
+            @server.custom_route("/health", methods=["GET"])
+            async def health_check(request: Request) -> Response:
+                return JSONResponse({"status": "ok"})
+        """
+
         def decorator(
             func: Callable[[Request], Awaitable[Response]],
         ) -> Callable[[Request], Awaitable[Response]]:
