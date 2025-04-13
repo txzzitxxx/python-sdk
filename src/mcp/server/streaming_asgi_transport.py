@@ -173,6 +173,7 @@ class StreamingASGITransport(AsyncBaseTransport):
                 # Ensure events are set even if there's an error
                 initial_response_ready.set()
                 response_complete.set()
+                await content_send_channel.aclose()
 
         # Create tasks for running the app and processing messages
         self.task_group.start_soon(run_app)
@@ -205,5 +206,8 @@ class StreamingASGIResponseStream(AsyncByteStream):
         self.receive_channel = receive_channel
 
     async def __aiter__(self) -> typing.AsyncIterator[bytes]:
-        async for chunk in self.receive_channel:
-            yield chunk
+        try:
+            async for chunk in self.receive_channel:
+                yield chunk
+        finally:
+            await self.receive_channel.aclose()
