@@ -1140,9 +1140,12 @@ class TestFastMCPWithAuth:
                 assert sse.event == "message"
                 sse_data = json.loads(sse.data)
                 assert sse_data["id"] == "123"
-                assert set(sse_data["result"]["capabilities"].keys()) == set(
-                    ("experimental", "prompts", "resources", "tools")
-                )
+                assert set(sse_data["result"]["capabilities"].keys()) == {
+                    "experimental",
+                    "prompts",
+                    "resources",
+                    "tools",
+                }
                 # the /sse endpoint will never finish; normally, the client could just
                 # disconnect, but in tests the easiest way to do this is to cancel the
                 # task group
