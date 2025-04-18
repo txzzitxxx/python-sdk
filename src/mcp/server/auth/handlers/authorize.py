@@ -90,6 +90,21 @@ class AuthorizationHandler:
             error_description: str | None,
             attempt_load_client: bool = True,
         ):
+            # Error responses take two different formats:
+            # 1. The request has a valid client ID & redirect_uri: we issue a redirect
+            #    back to the redirect_uri with the error response fields as query
+            #    parameters. This allows the client to be notified of the error.
+            # 2. Otherwise, we return an error response directly to the end user;
+            #     we choose to do so in JSON, but this is left undefined in the
+            #     specification.
+            # See https://datatracker.ietf.org/doc/html/rfc6749#section-4.1.2.1
+            #
+            # This logic is a bit awkward to handle, because the error might be thrown
+            # very early in request validation, before we've done the usual Pydantic
+            # validation, loaded the client, etc. To handle this, error_response()
+            # contains fallback logic which attempts to load the parameters directly
+            # from the request.
+
             nonlocal client, redirect_uri, state
             if client is None and attempt_load_client:
                 # make last-ditch attempt to load the client
@@ -97,16 +112,20 @@ class AuthorizationHandler:
                 client = client_id and await self.provider.get_client(client_id)
             if redirect_uri is None and client:
                 # make last-ditch effort to load the redirect uri
-                if params is not None and "redirect_uri" not in params:
-                    raw_redirect_uri = None
-                else:
-                    raw_redirect_uri = AnyHttpUrlModel.model_validate(
-                        best_effort_extract_string("redirect_uri", params)
-                    ).root
                 try:
+                    if params is not None and "redirect_uri" not in params:
+                        raw_redirect_uri = None
+                    else:
+                        raw_redirect_uri = AnyHttpUrlModel.model_validate(
+                            best_effort_extract_string("redirect_uri", params)
+                        ).root
                     redirect_uri = client.validate_redirect_uri(raw_redirect_uri)
                 except (ValidationError, InvalidRedirectUriError):
+                    # if the redirect URI is invalid, ignore it & just return the
+                    # initial error
                     pass
+
+            # the error response MUST contain the state specified by the client, if any
             if state is None:
                 # make last-ditch effort to load state
                 state = best_effort_extract_string("state", params)
