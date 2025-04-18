@@ -489,6 +489,27 @@ class FastMCP:
         name: str | None = None,
         include_in_schema: bool = True,
     ):
+        """
+        Decorator to register a custom HTTP route on the FastMCP server.
+
+        Allows adding arbitrary HTTP endpoints outside the standard MCP protocol,
+        which can be useful for OAuth callbacks, health checks, or admin APIs.
+        The handler function must be an async function that accepts a Starlette
+        Request and returns a Response.
+
+        Args:
+            path: URL path for the route (e.g., "/oauth/callback")
+            methods: List of HTTP methods to support (e.g., ["GET", "POST"])
+            name: Optional name for the route (to reference this route with
+                  Starlette's reverse URL lookup feature)
+            include_in_schema: Whether to include in OpenAPI schema, defaults to True
+
+        Example:
+            @server.custom_route("/health", methods=["GET"])
+            async def health_check(request: Request) -> Response:
+                return JSONResponse({"status": "ok"})
+        """
+
         def decorator(
             func: Callable[[Request], Awaitable[Response]],
         ) -> Callable[[Request], Awaitable[Response]]:
@@ -517,6 +538,7 @@ class FastMCP:
     async def run_sse_async(self) -> None:
         """Run the server using SSE transport."""
         import uvicorn
+
         starlette_app = self.sse_app()
 
         config = uvicorn.Config(
@@ -529,6 +551,7 @@ class FastMCP:
         await server.serve()
 
     def sse_app(self) -> Starlette:
+        """Return an instance of the SSE server app."""
         from starlette.middleware import Middleware
         from starlette.routing import Mount, Route
 

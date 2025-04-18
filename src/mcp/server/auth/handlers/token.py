@@ -8,7 +8,6 @@ from pydantic import AnyHttpUrl, BaseModel, Field, RootModel, ValidationError
 from starlette.requests import Request
 
 from mcp.server.auth.errors import (
-    ErrorResponse,
     stringify_pydantic_error,
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
@@ -80,7 +79,7 @@ class TokenHandler:
     provider: OAuthServerProvider[Any, Any, Any]
     client_authenticator: ClientAuthenticator
 
-    def response(self, obj: TokenSuccessResponse | TokenErrorResponse | ErrorResponse):
+    def response(self, obj: TokenSuccessResponse | TokenErrorResponse):
         status_code = 200
         if isinstance(obj, TokenErrorResponse):
             status_code = 400

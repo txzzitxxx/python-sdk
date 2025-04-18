@@ -1,7 +1,6 @@
 import logging
 from dataclasses import dataclass
 from typing import Any, Literal
-from urllib.parse import urlencode, urlparse, urlunparse
 
 from pydantic import AnyHttpUrl, AnyUrl, BaseModel, Field, RootModel, ValidationError
 from starlette.datastructures import FormData, QueryParams
@@ -9,7 +8,6 @@ from starlette.requests import Request
 from starlette.responses import RedirectResponse, Response
 
 from mcp.server.auth.errors import (
-    OAuthError,
     stringify_pydantic_error,
 )
 from mcp.server.auth.json_response import PydanticJSONResponse
@@ -225,34 +223,3 @@ class AuthorizationHandler:
             return await error_response(
                 error="server_error", error_description="An unexpected error occurred"
             )
-
-
-def create_error_redirect(
-    redirect_uri: AnyUrl, error: Exception | AuthorizationErrorResponse
-) -> str:
-    parsed_uri = urlparse(str(redirect_uri))
-
-    if isinstance(error, AuthorizationErrorResponse):
-        # Convert ErrorResponse to dict
-        error_dict = error.model_dump(exclude_none=True)
-        query_params = {}
-        for key, value in error_dict.items():
-            if value is not None:
-                if key == "error_uri" and hasattr(value, "__str__"):
-                    query_params[key] = str(value)
-                else:
-                    query_params[key] = value
-
-    elif isinstance(error, OAuthError):
-        query_params = {"error": error.error_code, "error_description": str(error)}
-    else:
-        query_params = {
-            "error": "server_error",
-            "error_description": "An unknown error occurred",
-        }
-
-    new_query = urlencode(query_params)
-    if parsed_uri.query:
-        new_query = f"{parsed_uri.query}&{new_query}"
-
-    return urlunparse(parsed_uri._replace(query=new_query))

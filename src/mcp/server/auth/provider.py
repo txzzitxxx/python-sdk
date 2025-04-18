@@ -154,7 +154,7 @@ class OAuthServerProvider(
         +------------+
 
         Implementations will need to define another handler on the MCP server return
-        flow to perform the second redirect, and generates and stores an authorization
+        flow to perform the second redirect, and generate and store an authorization
         code as part of completing the OAuth authorization step.
 
         Implementations SHOULD generate an authorization code with at least 160 bits of
