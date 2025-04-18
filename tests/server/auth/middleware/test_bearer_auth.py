@@ -18,7 +18,7 @@ from mcp.server.auth.middleware.bearer_auth import (
 )
 from mcp.server.auth.provider import (
     AccessToken,
-    OAuthServerProvider,
+    OAuthAuthorizationServerProvider,
 )
 
 
@@ -42,7 +42,7 @@ class MockOAuthProvider:
 
 
 def add_token_to_provider(
-    provider: OAuthServerProvider[Any, Any, Any], token: str, access_token: AccessToken
+    provider: OAuthAuthorizationServerProvider[Any, Any, Any], token: str, access_token: AccessToken
 ) -> None:
     """Helper function to add a token to a provider.
 
@@ -70,10 +70,10 @@ class MockApp:
 
 
 @pytest.fixture
-def mock_oauth_provider() -> OAuthServerProvider[Any, Any, Any]:
+def mock_oauth_provider() -> OAuthAuthorizationServerProvider[Any, Any, Any]:
     """Create a mock OAuth provider."""
     # Use type casting to satisfy the type checker
-    return cast(OAuthServerProvider[Any, Any, Any], MockOAuthProvider())
+    return cast(OAuthAuthorizationServerProvider[Any, Any, Any], MockOAuthProvider())
 
 
 @pytest.fixture
@@ -114,7 +114,7 @@ class TestBearerAuthBackend:
     """Tests for the BearerAuthBackend class."""
 
     async def test_no_auth_header(
-        self, mock_oauth_provider: OAuthServerProvider[Any, Any, Any]
+        self, mock_oauth_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
     ):
         """Test authentication with no Authorization header."""
         backend = BearerAuthBackend(provider=mock_oauth_provider)
@@ -123,7 +123,7 @@ class TestBearerAuthBackend:
         assert result is None
 
     async def test_non_bearer_auth_header(
-        self, mock_oauth_provider: OAuthServerProvider[Any, Any, Any]
+        self, mock_oauth_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
     ):
         """Test authentication with non-Bearer Authorization header."""
         backend = BearerAuthBackend(provider=mock_oauth_provider)
@@ -137,7 +137,7 @@ class TestBearerAuthBackend:
         assert result is None
 
     async def test_invalid_token(
-        self, mock_oauth_provider: OAuthServerProvider[Any, Any, Any]
+        self, mock_oauth_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
     ):
         """Test authentication with invalid token."""
         backend = BearerAuthBackend(provider=mock_oauth_provider)
@@ -152,7 +152,7 @@ class TestBearerAuthBackend:
 
     async def test_expired_token(
         self,
-        mock_oauth_provider: OAuthServerProvider[Any, Any, Any],
+        mock_oauth_provider: OAuthAuthorizationServerProvider[Any, Any, Any],
         expired_access_token: AccessToken,
     ):
         """Test authentication with expired token."""
@@ -171,7 +171,7 @@ class TestBearerAuthBackend:
 
     async def test_valid_token(
         self,
-        mock_oauth_provider: OAuthServerProvider[Any, Any, Any],
+        mock_oauth_provider: OAuthAuthorizationServerProvider[Any, Any, Any],
         valid_access_token: AccessToken,
     ):
         """Test authentication with valid token."""
@@ -195,7 +195,7 @@ class TestBearerAuthBackend:
 
     async def test_token_without_expiry(
         self,
-        mock_oauth_provider: OAuthServerProvider[Any, Any, Any],
+        mock_oauth_provider: OAuthAuthorizationServerProvider[Any, Any, Any],
         no_expiry_access_token: AccessToken,
     ):
         """Test authentication with token that has no expiry."""

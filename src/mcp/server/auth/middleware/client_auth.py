@@ -1,7 +1,7 @@
 import time
 from typing import Any
 
-from mcp.server.auth.provider import OAuthServerProvider
+from mcp.server.auth.provider import OAuthAuthorizationServerProvider
 from mcp.shared.auth import OAuthClientInformationFull
 
 
@@ -21,7 +21,7 @@ class ClientAuthenticator:
     logic is skipped.
     """
 
-    def __init__(self, provider: OAuthServerProvider[Any, Any, Any]):
+    def __init__(self, provider: OAuthAuthorizationServerProvider[Any, Any, Any]):
         """
         Initialize the dependency.
 

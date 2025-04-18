@@ -14,7 +14,7 @@ from mcp.server.auth.middleware.client_auth import (
     AuthenticationError,
     ClientAuthenticator,
 )
-from mcp.server.auth.provider import AccessToken, OAuthServerProvider, RefreshToken
+from mcp.server.auth.provider import AccessToken, OAuthAuthorizationServerProvider, RefreshToken
 
 
 class RevocationRequest(BaseModel):
@@ -35,7 +35,7 @@ class RevocationErrorResponse(BaseModel):
 
 @dataclass
 class RevocationHandler:
-    provider: OAuthServerProvider[Any, Any, Any]
+    provider: OAuthAuthorizationServerProvider[Any, Any, Any]
     client_authenticator: ClientAuthenticator
 
     async def handle(self, request: Request) -> Response:

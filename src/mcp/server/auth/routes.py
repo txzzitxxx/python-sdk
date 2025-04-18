@@ -14,7 +14,7 @@ from mcp.server.auth.handlers.register import RegistrationHandler
 from mcp.server.auth.handlers.revoke import RevocationHandler
 from mcp.server.auth.handlers.token import TokenHandler
 from mcp.server.auth.middleware.client_auth import ClientAuthenticator
-from mcp.server.auth.provider import OAuthServerProvider
+from mcp.server.auth.provider import OAuthAuthorizationServerProvider
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.shared.auth import OAuthMetadata
 
@@ -65,7 +65,7 @@ def cors_middleware(
 
 
 def create_auth_routes(
-    provider: OAuthServerProvider[Any, Any, Any],
+    provider: OAuthAuthorizationServerProvider[Any, Any, Any],
     issuer_url: AnyHttpUrl,
     service_documentation_url: AnyHttpUrl | None = None,
     client_registration_options: ClientRegistrationOptions | None = None,

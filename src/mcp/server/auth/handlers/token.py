@@ -15,7 +15,7 @@ from mcp.server.auth.middleware.client_auth import (
     AuthenticationError,
     ClientAuthenticator,
 )
-from mcp.server.auth.provider import OAuthServerProvider, TokenError, TokenErrorCode
+from mcp.server.auth.provider import OAuthAuthorizationServerProvider, TokenError, TokenErrorCode
 from mcp.shared.auth import OAuthToken
 
 
@@ -76,7 +76,7 @@ class TokenSuccessResponse(RootModel[OAuthToken]):
 
 @dataclass
 class TokenHandler:
-    provider: OAuthServerProvider[Any, Any, Any]
+    provider: OAuthAuthorizationServerProvider[Any, Any, Any]
     client_authenticator: ClientAuthenticator
 
     def response(self, obj: TokenSuccessResponse | TokenErrorResponse):

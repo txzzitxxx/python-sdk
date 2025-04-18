@@ -31,7 +31,7 @@ from mcp.server.auth.middleware.bearer_auth import (
     BearerAuthBackend,
     RequireAuthMiddleware,
 )
-from mcp.server.auth.provider import OAuthServerProvider
+from mcp.server.auth.provider import OAuthAuthorizationServerProvider
 from mcp.server.auth.settings import (
     AuthSettings,
 )
@@ -128,7 +128,7 @@ class FastMCP:
         self,
         name: str | None = None,
         instructions: str | None = None,
-        auth_provider: OAuthServerProvider[Any, Any, Any] | None = None,
+        auth_server_provider: OAuthAuthorizationServerProvider[Any, Any, Any] | None = None,
         **settings: Any,
     ):
         self.settings = Settings(**settings)
@@ -149,12 +149,17 @@ class FastMCP:
         self._prompt_manager = PromptManager(
             warn_on_duplicate_prompts=self.settings.warn_on_duplicate_prompts
         )
-        if (self.settings.auth is not None) != (auth_provider is not None):
+        if (self.settings.auth is not None) != (auth_server_provider is not None):
+            # TODO: after we support separate authorization servers (see
+            # https://github.com/modelcontextprotocol/modelcontextprotocol/pull/284)
+            # we should validate that if auth is enabled, we have either an
+            # auth_server_provider to host our own authorization server,
+            # OR the URL of a 3rd party authorization server.
             raise ValueError(
-                "settings.auth must be specified if and only if auth_provider "
+                "settings.auth must be specified if and only if auth_server_provider "
                 "is specified"
             )
-        self._auth_provider = auth_provider
+        self._auth_server_provider = auth_server_provider
         self._custom_starlette_routes: list[Route] = []
         self.dependencies = self.settings.dependencies
 
@@ -580,7 +585,7 @@ class FastMCP:
         required_scopes = []
 
         # Add auth endpoints if auth provider is configured
-        if self._auth_provider:
+        if self._auth_server_provider:
             assert self.settings.auth
             from mcp.server.auth.routes import create_auth_routes
 
@@ -591,7 +596,7 @@ class FastMCP:
                 Middleware(
                     AuthenticationMiddleware,
                     backend=BearerAuthBackend(
-                        provider=self._auth_provider,
+                        provider=self._auth_server_provider,
                     ),
                 ),
                 # Add the auth context middleware to store
@@ -600,7 +605,7 @@ class FastMCP:
             ]
             routes.extend(
                 create_auth_routes(
-                    provider=self._auth_provider,
+                    provider=self._auth_server_provider,
                     issuer_url=self.settings.auth.issuer_url,
                     service_documentation_url=self.settings.auth.service_documentation_url,
                     client_registration_options=self.settings.auth.client_registration_options,

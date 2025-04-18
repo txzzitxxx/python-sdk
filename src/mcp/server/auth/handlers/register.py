@@ -11,7 +11,7 @@ from starlette.responses import Response
 from mcp.server.auth.errors import stringify_pydantic_error
 from mcp.server.auth.json_response import PydanticJSONResponse
 from mcp.server.auth.provider import (
-    OAuthServerProvider,
+    OAuthAuthorizationServerProvider,
     RegistrationError,
     RegistrationErrorCode,
 )
@@ -32,7 +32,7 @@ class RegistrationErrorResponse(BaseModel):
 
 @dataclass
 class RegistrationHandler:
-    provider: OAuthServerProvider[Any, Any, Any]
+    provider: OAuthAuthorizationServerProvider[Any, Any, Any]
     options: ClientRegistrationOptions
 
     async def handle(self, request: Request) -> Response:

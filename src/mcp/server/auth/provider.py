@@ -96,7 +96,7 @@ RefreshTokenT = TypeVar("RefreshTokenT", bound=RefreshToken)
 AccessTokenT = TypeVar("AccessTokenT", bound=AccessToken)
 
 
-class OAuthServerProvider(
+class OAuthAuthorizationServerProvider(
     Protocol, Generic[AuthorizationCodeT, RefreshTokenT, AccessTokenT]
 ):
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:

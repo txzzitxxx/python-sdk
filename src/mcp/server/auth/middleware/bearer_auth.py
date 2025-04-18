@@ -10,7 +10,7 @@ from starlette.exceptions import HTTPException
 from starlette.requests import HTTPConnection
 from starlette.types import Receive, Scope, Send
 
-from mcp.server.auth.provider import AccessToken, OAuthServerProvider
+from mcp.server.auth.provider import AccessToken, OAuthAuthorizationServerProvider
 
 
 class AuthenticatedUser(SimpleUser):
@@ -29,7 +29,7 @@ class BearerAuthBackend(AuthenticationBackend):
 
     def __init__(
         self,
-        provider: OAuthServerProvider[Any, Any, Any],
+        provider: OAuthAuthorizationServerProvider[Any, Any, Any],
     ):
         self.provider = provider
 

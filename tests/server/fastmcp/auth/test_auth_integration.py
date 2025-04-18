@@ -21,7 +21,7 @@ from mcp.server.auth.provider import (
     AccessToken,
     AuthorizationCode,
     AuthorizationParams,
-    OAuthServerProvider,
+    OAuthAuthorizationServerProvider,
     RefreshToken,
     construct_redirect_uri,
 )
@@ -41,7 +41,7 @@ from mcp.types import JSONRPCRequest
 
 
 # Mock OAuth provider for testing
-class MockOAuthProvider(OAuthServerProvider):
+class MockOAuthProvider(OAuthAuthorizationServerProvider):
     def __init__(self):
         self.clients = {}
         self.auth_codes = {}  # code -> {client_id, code_challenge, redirect_uri}
@@ -1003,7 +1003,7 @@ class TestFastMCPWithAuth:
         """Test creating a FastMCP server with authentication."""
         # Create FastMCP server with auth provider
         mcp = FastMCP(
-            auth_provider=mock_oauth_provider,
+            auth_server_provider=mock_oauth_provider,
             require_auth=True,
             auth=AuthSettings(
                 issuer_url=AnyHttpUrl("https://auth.example.com"),

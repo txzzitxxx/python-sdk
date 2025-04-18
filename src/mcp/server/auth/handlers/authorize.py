@@ -15,7 +15,7 @@ from mcp.server.auth.provider import (
     AuthorizationErrorCode,
     AuthorizationParams,
     AuthorizeError,
-    OAuthServerProvider,
+    OAuthAuthorizationServerProvider,
     construct_redirect_uri,
 )
 from mcp.shared.auth import (
@@ -74,7 +74,7 @@ class AnyHttpUrlModel(RootModel[AnyHttpUrl]):
 
 @dataclass
 class AuthorizationHandler:
-    provider: OAuthServerProvider[Any, Any, Any]
+    provider: OAuthAuthorizationServerProvider[Any, Any, Any]
 
     async def handle(self, request: Request) -> Response:
         # implements authorization requests for grant_type=code;
