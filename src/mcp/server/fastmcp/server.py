@@ -15,7 +15,6 @@ from typing import Any, Generic, Literal
 
 import anyio
 import pydantic_core
-import uvicorn
 from pydantic import BaseModel, Field
 from pydantic.networks import AnyUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -516,8 +515,12 @@ class FastMCP:
             )
 
     async def run_sse_async(self) -> None:
+        """Run the server using SSE transport."""
+        import uvicorn
+        starlette_app = self.sse_app()
+
         config = uvicorn.Config(
-            app=self.sse_app(),
+            starlette_app,
             host=self.settings.host,
             port=self.settings.port,
             log_level=self.settings.log_level.lower(),
