@@ -161,29 +161,23 @@ async def http_client(server, server_url) -> AsyncGenerator[httpx.AsyncClient, N
 @pytest.mark.anyio
 async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
     """Test the SSE connection establishment simply with an HTTP client."""
-    async with anyio.create_task_group():
+    with anyio.fail_after(3):
+        async with http_client.stream("GET", "/sse") as response:
+            assert response.status_code == 200
+            assert (
+                response.headers["content-type"]
+                == "text/event-stream; charset=utf-8"
+            )
 
-        async def connection_test() -> None:
-            async with http_client.stream("GET", "/sse") as response:
-                assert response.status_code == 200
-                assert (
-                    response.headers["content-type"]
-                    == "text/event-stream; charset=utf-8"
-                )
-
-                line_number = 0
-                async for line in response.aiter_lines():
-                    if line_number == 0:
-                        assert line == "event: endpoint"
-                    elif line_number == 1:
-                        assert line.startswith("data: /messages/?session_id=")
-                    else:
-                        return
-                    line_number += 1
-
-        # Add timeout to prevent test from hanging if it fails
-        with anyio.fail_after(3):
-            await connection_test()
+            line_number = 0
+            async for line in response.aiter_lines():
+                if line_number == 0:
+                    assert line == "event: endpoint"
+                elif line_number == 1:
+                    assert line.startswith("data: /messages/?session_id=")
+                else:
+                    return
+                line_number += 1
 
 
 @pytest.mark.anyio
