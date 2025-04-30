@@ -42,7 +42,9 @@ class MockOAuthProvider:
 
 
 def add_token_to_provider(
-    provider: OAuthAuthorizationServerProvider[Any, Any, Any], token: str, access_token: AccessToken
+    provider: OAuthAuthorizationServerProvider[Any, Any, Any],
+    token: str,
+    access_token: AccessToken,
 ) -> None:
     """Helper function to add a token to a provider.
 

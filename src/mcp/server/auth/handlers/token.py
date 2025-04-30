@@ -15,7 +15,11 @@ from mcp.server.auth.middleware.client_auth import (
     AuthenticationError,
     ClientAuthenticator,
 )
-from mcp.server.auth.provider import OAuthAuthorizationServerProvider, TokenError, TokenErrorCode
+from mcp.server.auth.provider import (
+    OAuthAuthorizationServerProvider,
+    TokenError,
+    TokenErrorCode,
+)
 from mcp.shared.auth import OAuthToken
 
 

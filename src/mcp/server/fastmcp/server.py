@@ -128,7 +128,8 @@ class FastMCP:
         self,
         name: str | None = None,
         instructions: str | None = None,
-        auth_server_provider: OAuthAuthorizationServerProvider[Any, Any, Any] | None = None,
+        auth_server_provider: OAuthAuthorizationServerProvider[Any, Any, Any]
+        | None = None,
         **settings: Any,
     ):
         self.settings = Settings(**settings)

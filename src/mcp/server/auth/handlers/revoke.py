@@ -14,7 +14,11 @@ from mcp.server.auth.middleware.client_auth import (
     AuthenticationError,
     ClientAuthenticator,
 )
-from mcp.server.auth.provider import AccessToken, OAuthAuthorizationServerProvider, RefreshToken
+from mcp.server.auth.provider import (
+    AccessToken,
+    OAuthAuthorizationServerProvider,
+    RefreshToken,
+)
 
 
 class RevocationRequest(BaseModel):
