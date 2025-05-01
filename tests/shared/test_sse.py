@@ -150,42 +150,31 @@ def server(server_port: int) -> Generator[None, None, None]:
         print("server process failed to terminate")
 
 
-@pytest.fixture()
-async def http_client(server, server_url) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """Create test client"""
-    async with httpx.AsyncClient(base_url=server_url) as client:
-        yield client
-
 
 @pytest.mark.anyio
-async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
+async def test_raw_sse_connection(server, server_url) -> None:
     """Test the SSE connection establishment simply with an HTTP client."""
     try:
-        async with anyio.create_task_group():
+        async with httpx.AsyncClient(base_url=server_url) as http_client:
+            async with http_client.stream("GET", "/sse") as response:
+                assert response.status_code == 200
+                assert (
+                    response.headers["content-type"]
+                    == "text/event-stream; charset=utf-8"
+                )
 
-            async def connection_test() -> None:
-                async with http_client.stream("GET", "/sse") as response:
-                    assert response.status_code == 200
-                    assert (
-                        response.headers["content-type"]
-                        == "text/event-stream; charset=utf-8"
-                    )
+                line_number = 0
+                async for line in response.aiter_lines():
+                    if line_number == 0:
+                        assert line == "event: endpoint"
+                    elif line_number == 1:
+                        assert line.startswith("data: /messages/?session_id=")
+                    else:
+                        return
+                    line_number += 1
 
-                    line_number = 0
-                    async for line in response.aiter_lines():
-                        if line_number == 0:
-                            assert line == "event: endpoint"
-                        elif line_number == 1:
-                            assert line.startswith("data: /messages/?session_id=")
-                        else:
-                            return
-                        line_number += 1
-
-            # Add timeout to prevent test from hanging if it fails
-            with anyio.fail_after(3):
-                await connection_test()
     except Exception as e:
-        pytest.fail(f"HTTP error occurred:{e}")
+        pytest.fail(f"{e}")
 
 
 @pytest.mark.anyio
