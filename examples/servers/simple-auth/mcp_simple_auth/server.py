@@ -230,7 +230,7 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
     async def load_refresh_token(
         self, client: OAuthClientInformationFull, refresh_token: str
     ) -> RefreshToken | None:
-        """Load a refresh token (not supported by GitHub)."""
+        """Load a refresh token - not supported."""
         return None
 
     async def exchange_refresh_token(
@@ -239,8 +239,8 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        """Exchange refresh token (not supported by GitHub)."""
-        raise NotImplementedError("GitHub OAuth does not support refresh tokens")
+        """Exchange refresh token """
+        raise NotImplementedError("Not supported")
 
     async def revoke_token(
         self, token: str, token_type_hint: str | None = None
