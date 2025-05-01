@@ -120,17 +120,15 @@ class SseServerTransport:
                         }
                     )
 
-        # Ensure all streams are properly closed
-        async with read_stream, write_stream, read_stream_writer, sse_stream_reader:
-            async with anyio.create_task_group() as tg:
-                response = EventSourceResponse(
-                    content=sse_stream_reader, data_sender_callable=sse_writer
-                )
-                logger.debug("Starting SSE response task")
-                tg.start_soon(response, scope, receive, send)
+        async with anyio.create_task_group() as tg:
+            response = EventSourceResponse(
+                content=sse_stream_reader, data_sender_callable=sse_writer
+            )
+            logger.debug("Starting SSE response task")
+            tg.start_soon(response, scope, receive, send)
 
-                logger.debug("Yielding read and write streams")
-                yield (read_stream, write_stream, response)
+            logger.debug("Yielding read and write streams")
+            yield (read_stream, write_stream)
 
     async def handle_post_message(
         self, scope: Scope, receive: Receive, send: Send
@@ -175,3 +173,4 @@ class SseServerTransport:
         response = Response("Accepted", status_code=202)
         await response(scope, receive, send)
         await writer.send(message)
+        

@@ -150,15 +150,20 @@ def server(server_port: int) -> Generator[None, None, None]:
         print("server process failed to terminate")
 
 
+@pytest.fixture()
+async def http_client(server, server_url) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """Create test client"""
+    async with httpx.AsyncClient(base_url=server_url) as client:
+        yield client
 
+
+# Tests
 @pytest.mark.anyio
-@pytest.mark.skip(
-    "fails in CI, but works locally. Need to investigate why."
-)
-async def test_raw_sse_connection(server, server_url) -> None:
+async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
     """Test the SSE connection establishment simply with an HTTP client."""
-    try:
-        async with httpx.AsyncClient(base_url=server_url) as http_client:
+    async with anyio.create_task_group():
+
+        async def connection_test() -> None:
             async with http_client.stream("GET", "/sse") as response:
                 assert response.status_code == 200
                 assert (
@@ -176,8 +181,9 @@ async def test_raw_sse_connection(server, server_url) -> None:
                         return
                     line_number += 1
 
-    except Exception as e:
-        pytest.fail(f"{e}")
+        # Add timeout to prevent test from hanging if it fails
+        with anyio.fail_after(3):
+            await connection_test()
 
 
 @pytest.mark.anyio
