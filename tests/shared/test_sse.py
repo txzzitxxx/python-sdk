@@ -161,7 +161,7 @@ async def http_client(server, server_url) -> AsyncGenerator[httpx.AsyncClient, N
 @pytest.mark.anyio
 async def test_raw_sse_connection(http_client: httpx.AsyncClient) -> None:
     """Test the SSE connection establishment simply with an HTTP client."""
-    async with http_client.stream("GET", "/sse", timeout=5) as response:
+    async with http_client.stream("GET", "/sse", timeout=5, follow_redirects=True) as response:
         assert response.status_code == 200
         assert (
             response.headers["content-type"]
