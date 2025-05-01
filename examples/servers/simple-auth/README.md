@@ -2,7 +2,7 @@
 
 This is a simple example of an MCP server with GitHub OAuth authentication. It demonstrates the essential components needed for OAuth integration with just a single tool.
 
-This is just an example for of a server that uses auth, an official GitHub mcp server is [here](https://github.com/github/github-mcp-server)
+This is just an example of a server that uses auth, an official GitHub mcp server is [here](https://github.com/github/github-mcp-server)
 
 ## Overview
 
