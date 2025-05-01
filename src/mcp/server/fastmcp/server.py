@@ -627,9 +627,7 @@ class FastMCP:
         routes.append(
             Route(
                 self.settings.sse_path,
-                endpoint=RequireAuthMiddleware(
-                    handle_sse, required_scopes
-                ),
+                endpoint=RequireAuthMiddleware(handle_sse, required_scopes),
                 methods=["GET"],
             )
         )

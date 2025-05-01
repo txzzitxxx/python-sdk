@@ -47,7 +47,7 @@ default-groups = ["dev", "docs"]
 
 [dependency-groups]
 dev = [
-    "pyright>=1.1.396",
+    "pyright>=1.1.391",
     "pytest>=8.3.4",
     "ruff>=0.8.5",
     "trio>=0.26.2",
@@ -115,5 +115,5 @@ filterwarnings = [
     # This should be fixed on Uvicorn's side.
     "ignore::DeprecationWarning:websockets",
     "ignore:websockets.server.WebSocketServerProtocol is deprecated:DeprecationWarning",
-    "ignore:Returning str or bytes.*:DeprecationWarning:mcp.server.lowlevel",
+    "ignore:Returning str or bytes.*:DeprecationWarning:mcp.server.lowlevel"
 ]

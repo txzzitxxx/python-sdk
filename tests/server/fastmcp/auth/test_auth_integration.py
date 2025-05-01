@@ -987,9 +987,6 @@ class TestAuthEndpoints:
         )
 
 
-
-
-
 class TestAuthorizeEndpointErrors:
     """Test error handling in the OAuth authorization endpoint."""
 
