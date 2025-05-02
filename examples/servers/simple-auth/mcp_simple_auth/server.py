@@ -35,7 +35,7 @@ class ServerSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="MCP_GITHUB_")
 
     # Server settings
-    host: str = "0.0.0.0"
+    host: str = "localhost"
     port: int = 8000
     server_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
 
@@ -196,7 +196,9 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
             (
                 token
                 for token, data in self.tokens.items()
-                if token.startswith("gho_") and data.client_id == client.client_id
+                # see https://github.blog/engineering/platform-security/behind-githubs-new-authentication-token-formats/
+                # which you get depends on your GH app setup.
+                if (token.startswith("ghu_") or token.startswith('gho_')) and data.client_id == client.client_id
             ),
             None,
         )
@@ -341,7 +343,7 @@ def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
 
 @click.command()
 @click.option("--port", default=8000, help="Port to listen on")
-@click.option("--host", default="0.0.0.0", help="Host to bind to")
+@click.option("--host", default="localhost", help="Host to bind to")
 def main(port: int, host: str) -> int:
     """Run the simple GitHub MCP server."""
     logging.basicConfig(level=logging.INFO)
