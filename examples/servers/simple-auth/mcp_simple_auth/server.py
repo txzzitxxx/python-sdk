@@ -103,7 +103,7 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
             f"{self.settings.github_auth_url}"
             f"?client_id={self.settings.github_client_id}"
             f"&redirect_uri={self.settings.github_callback_path}"
-            f"&scope={self.settings.github_scope}"  # Only request user scope for minimal example
+            f"&scope={self.settings.github_scope}"
             f"&state={state}"
         )
 
@@ -200,7 +200,8 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
                 for token, data in self.tokens.items()
                 # see https://github.blog/engineering/platform-security/behind-githubs-new-authentication-token-formats/
                 # which you get depends on your GH app setup.
-                if (token.startswith("ghu_") or token.startswith('gho_')) and data.client_id == client.client_id
+                if (token.startswith("ghu_") or token.startswith("gho_"))
+                and data.client_id == client.client_id
             ),
             None,
         )
@@ -243,7 +244,7 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
         refresh_token: RefreshToken,
         scopes: list[str],
     ) -> OAuthToken:
-        """Exchange refresh token """
+        """Exchange refresh token"""
         raise NotImplementedError("Not supported")
 
     async def revoke_token(
