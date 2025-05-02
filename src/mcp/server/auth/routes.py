@@ -9,6 +9,7 @@ from starlette.routing import Route, request_response  # type: ignore
 from starlette.types import ASGIApp
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
+from mcp.server.auth.handlers.consent import ConsentHandler
 from mcp.server.auth.handlers.metadata import MetadataHandler
 from mcp.server.auth.handlers.register import RegistrationHandler
 from mcp.server.auth.handlers.revoke import RevocationHandler
@@ -49,6 +50,7 @@ AUTHORIZATION_PATH = "/authorize"
 TOKEN_PATH = "/token"
 REGISTRATION_PATH = "/register"
 REVOCATION_PATH = "/revoke"
+CONSENT_PATH = "/consent"
 
 
 def cors_middleware(
@@ -112,6 +114,13 @@ def create_auth_routes(
                 ["POST", "OPTIONS"],
             ),
             methods=["POST", "OPTIONS"],
+        ),
+        Route(
+            CONSENT_PATH,
+            # do not allow CORS for consent endpoint;
+            # clients should just redirect to this
+            endpoint=ConsentHandler(provider).handle,
+            methods=["GET", "POST"],
         ),
     ]
 

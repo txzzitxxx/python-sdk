@@ -174,6 +174,27 @@ class OAuthAuthorizationServerProvider(
         """
         ...
 
+    async def has_client_consent(self, client: OAuthClientInformationFull) -> bool:
+        """
+        Check if a client has already provided consent.
+
+        Args:
+            client: The client to check consent status for.
+
+        Returns:
+            True if the client has provided consent, False otherwise.
+        """
+        ...
+
+    async def grant_client_consent(self, client: OAuthClientInformationFull) -> None:
+        """
+        Grant consent for a client.
+
+        Args:
+            client: The client to grant consent for.
+        """
+        ...
+
     async def load_authorization_code(
         self, client: OAuthClientInformationFull, authorization_code: str
     ) -> AuthorizationCodeT | None:

@@ -73,6 +73,8 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
         # Store GitHub tokens with MCP tokens using the format:
         # {"mcp_token": "github_token"}
         self.token_mapping: dict[str, str] = {}
+        # Track which clients have been granted consent
+        self.client_consent: dict[str, bool] = {}
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """Get OAuth client information."""
@@ -81,6 +83,14 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
     async def register_client(self, client_info: OAuthClientInformationFull):
         """Register a new OAuth client."""
         self.clients[client_info.client_id] = client_info
+        
+    async def has_client_consent(self, client: OAuthClientInformationFull) -> bool:
+        """Check if a client has already provided consent."""
+        return self.client_consent.get(client.client_id, False)
+        
+    async def grant_client_consent(self, client: OAuthClientInformationFull) -> None:
+        """Grant consent for a client."""
+        self.client_consent[client.client_id] = True
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
