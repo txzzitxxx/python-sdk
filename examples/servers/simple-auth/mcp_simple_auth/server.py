@@ -48,6 +48,9 @@ class ServerSettings(BaseSettings):
     github_auth_url: str = "https://github.com/login/oauth/authorize"
     github_token_url: str = "https://github.com/login/oauth/access_token"
 
+    mcp_scope: str = "user"
+    github_scope: str = "read:user"
+
     def __init__(self, **data):
         """Initialize settings with values from environment variables.
 
@@ -100,7 +103,7 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
             f"{self.settings.github_auth_url}"
             f"?client_id={self.settings.github_client_id}"
             f"&redirect_uri={self.settings.github_callback_path}"
-            f"&scope=user"  # Only request user scope for minimal example
+            f"&scope={self.settings.github_scope}"  # Only request user scope for minimal example
             f"&state={state}"
         )
 
@@ -141,7 +144,6 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
                 raise HTTPException(400, data.get("error_description", data["error"]))
 
             github_token = data["access_token"]
-            scope = data.get("scope", "user").split()
 
             # Create MCP authorization code
             new_code = f"mcp_{secrets.token_hex(16)}"
@@ -151,7 +153,7 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
                 redirect_uri=AnyHttpUrl(redirect_uri),
                 redirect_uri_provided_explicitly=redirect_uri_provided_explicitly,
                 expires_at=time.time() + 300,
-                scopes=scope,
+                scopes=[self.settings.mcp_scope],
                 code_challenge=code_challenge,
             )
             self.auth_codes[new_code] = auth_code
@@ -160,7 +162,7 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
             self.tokens[github_token] = AccessToken(
                 token=github_token,
                 client_id=client_id,
-                scopes=scope,
+                scopes=[self.settings.github_scope],
                 expires_at=None,
             )
 
@@ -260,10 +262,10 @@ def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
         issuer_url=settings.server_url,
         client_registration_options=ClientRegistrationOptions(
             enabled=True,
-            valid_scopes=["user"],
-            default_scopes=["user"],
+            valid_scopes=[settings.mcp_scope],
+            default_scopes=[settings.mcp_scope],
         ),
-        required_scopes=["user"],
+        required_scopes=[settings.mcp_scope],
     )
 
     app = FastMCP(
