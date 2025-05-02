@@ -814,7 +814,10 @@ class Context(BaseModel, Generic[ServerSessionT, LifespanContextT]):
             **extra: Additional structured data to include
         """
         await self.request_context.session.send_log_message(
-            level=level, data=message, logger=logger_name
+            level=level,
+            data=message,
+            logger=logger_name,
+            related_request_id=self.request_id,
         )
 
     @property
