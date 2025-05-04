@@ -16,7 +16,7 @@ import uvicorn
 from mcp.client.session import ClientSession
 from mcp.client.sse import sse_client
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.types import InitializeResult, TextContent, ElicitResult
+from mcp.types import ElicitResult, InitializeResult, TextContent
 
 
 @pytest.fixture
