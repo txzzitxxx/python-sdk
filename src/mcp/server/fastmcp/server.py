@@ -853,7 +853,7 @@ class Context(BaseModel, Generic[ServerSessionT, LifespanContextT]):
             related_request_id=self.request_id,
         )
 
-        return result.response
+        return result.content
 
     async def log(
         self,
