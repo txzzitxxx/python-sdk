@@ -61,37 +61,10 @@ sequenceDiagram
 
 ## Installation and Usage
 
-### 1. Set up the Project Analyst Agent
-
 ```bash
-# From the project-analyst directory
-cd project-analyst
-uv venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv add --dev -e .
-# No need to run it directly - it will be started by the Personal Assistant
-```
-
-### 2. Set up the Personal Assistant Agent
-
-```bash
-# From the personal-assistant directory
-cd personal-assistant
-uv venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv add --dev -e .
-# No need to run it directly - it will be started by the Chat CLI
-```
-
-### 3. Run the Chat CLI
-
-```bash
-# From the chat-cli directory
-cd chat-cli
-uv venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv add --dev -e .
-uv run mcp-chat-cli
+uv pip install -e .
+cd examples/agents/chat-cli
+uv run mcp-chat-cli --log-level=DEBUG
 ```
 
 This will start the entire agent chain. The Chat CLI will launch the Personal Assistant, which will in turn launch the Project Analyst.

@@ -3,7 +3,6 @@ name = "mcp-personal-assistant"
 version = "0.1.0"
 description = "Personal Assistant Agent using MCP"
 requires-python = ">=3.10"
-authors = [{ name = "Anthropic, PBC." }]
 keywords = ["mcp", "llm", "automation", "assistant", "agent"]
 license = { text = "MIT" }
 dependencies = ["anyio>=4.5", "httpx>=0.27", "mcp"]
