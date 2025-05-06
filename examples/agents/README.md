@@ -72,49 +72,52 @@ This will start the entire agent chain. The Chat CLI will launch the Personal As
 ## Example Conversation
 
 ```
-You: Hello
-Assistant: Hello! I'm your personal assistant. How can I help you today?
+You: Prioritize work on my project
+2025-05-06 13:39:41,672 - INFO - Processing request of type CallToolRequest
 
-You: What can you do?
-Assistant: I can help you with various tasks:
-1. Analyze projects and their issues (try: "Analyze the issues for the Python SDK project")
-2. Review priorities for projects
-3. Provide information and assistance
-4. Answer questions
+[Agent is asking]: Which project would you like information about?
+Please provide the requested information:
+project_name: PythonSDK
+issue_count (number): 100
+2025-05-06 13:39:47,540 - INFO - Processing request of type CallToolRequest
+2025-05-06 13:39:47,544 - INFO - Received elicitation request: 100 issues found. Would you like to proceed?
+2025-05-06 13:39:47,545 - INFO - Elicitation response: {'proceed': True}
 
-What would you like help with?
+Assistant: Here's my analysis of project 'PythonSDK':
 
-You: Analyze the Python SDK project
-Assistant: Here's my analysis of project 'Python':
-
-# Project Issues Analysis for Python
+# Project Issues Analysis for PythonSDK
 
 ## Summary
-- Total issues analyzed: 5
-- Open issues: 4
-- Closed issues: 1
+- Total issues analyzed: 100
+- Open issues: 69
+- Closed issues: 31
 
 ## Issues by Priority
-- high: 2
-- medium: 2
-- low: 1
+- medium: 37
+- high: 30
+- low: 17
+- critical: 16
 
 ## Issues by Type
-- bug: 2
-- feature: 1
-- improvement: 1
-- task: 1
+- improvement: 24
+- feature: 20
+- documentation: 14
+- task: 21
+- bug: 21
 
 ## Top Open Issues
-- #1: Bug for Python component 3 (Priority: high)
-- #2: Feature for Python component 2 (Priority: medium)
-- #3: Improvement for Python component 1 (Priority: high)
-- #5: Task for Python component 4 (Priority: low)
+- #1: Improvement for PythonSDK component 5 (Priority: medium)
+- #2: Feature for PythonSDK component 5 (Priority: high)
+- #3: Documentation for PythonSDK component 2 (Priority: high)
+- #4: Task for PythonSDK component 1 (Priority: medium)
+- #5: Improvement for PythonSDK component 5 (Priority: high)
 
 ## Recommended Next Steps
 1. Address high priority issues first
 2. Review issues with dependencies
 3. Re-estimate effort for any issues that have been open for a long time
+
+You: 
 ```
 
 ## Features Demonstrated
@@ -125,6 +128,7 @@ This example demonstrates several key MCP features:
 2. **Progress Reporting** - Agents can report progress during long-running operations
 3. **Layered Architecture** - Agents can be both MCP servers and clients
 4. **Tool Delegation** - Agents can delegate tasks to other specialized agents
+5. **Agent Communication over Elicitation** - Agents can delegate tasks to other specialized agents
 
 ## Implementation Details
 
