@@ -146,7 +146,7 @@ class ChatCLI:
                         else:
                             print(f"{prop_name} is required")
 
-        return ElicitResult(response=response)
+        return ElicitResult(content=response)
 
     async def list_tools(self) -> None:
         """List all available tools from the connected server."""
@@ -171,7 +171,7 @@ class ChatCLI:
     async def chat(self) -> None:
         """Start a chat session with the connected server."""
         logger.info("Starting chat session")
-        
+
         if not self.session:
             raise RuntimeError("Not connected to any server")
 

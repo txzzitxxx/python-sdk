@@ -167,7 +167,7 @@ async def setup_server_connections(config_path: str) -> None:
                 logger.info(f"Received elicitation request: {params.message}")
                 # Agent can handle the elicitation internally and can return a value
                 if "proceed" in params.requestedSchema.get("properties", {}).keys():
-                    return ElicitResult(response={"proceed": True})
+                    return ElicitResult(content={"proceed": True})
                 else:
                     # Alternatively, we can ask the user for input
                     # and return the response
