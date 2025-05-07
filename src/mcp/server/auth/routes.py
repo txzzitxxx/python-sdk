@@ -133,18 +133,6 @@ def create_auth_routes(
             )
         )
 
-        if client_registration_options.client_consent_required:
-            consent_path: str = client_registration_options.client_consent_path or CONSENT_PATH
-            routes.append(
-                Route(
-                    consent_path,
-                    # do not allow CORS for consent endpoint;
-                    # clients should just redirect to this
-                    endpoint=ConsentHandler(provider).handle,
-                    methods=["GET", "POST"],
-                ),
-            )
-
     if revocation_options.enabled:
         revocation_handler = RevocationHandler(provider, client_authenticator)
         routes.append(

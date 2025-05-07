@@ -219,26 +219,6 @@ class AuthorizationHandler:
             )
 
             try:
-                # Check if client has already consented
-                has_consent = await self.provider.has_client_consent(client)
-
-                if not has_consent:
-                    # Redirect to consent page with necessary parameters
-                    consent_url = "/consent" + "?" + urlencode({
-                        "client_id": auth_request.client_id,
-                        "redirect_uri": str(redirect_uri),
-                        "state": state or "",
-                        "scopes": " ".join(scopes) if scopes else "",
-                        "code_challenge": auth_request.code_challenge,
-                        "response_type": auth_request.response_type,
-                    })
-
-                    return RedirectResponse(
-                        url=consent_url,
-                        status_code=302,
-                        headers={"Cache-Control": "no-store"},
-                    )
-
                 # Let the provider pick the next URI to redirect to
                 return RedirectResponse(
                     url=await self.provider.authorize(
