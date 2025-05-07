@@ -33,6 +33,13 @@ class ConsentHandler:
         code_challenge = request.query_params.get("code_challenge", "")
         response_type = request.query_params.get("response_type", "")
 
+        # Get client info to display client_name
+        client_name = client_id  # Default to client_id if we can't get the client
+        if client_id:
+            client = await self.provider.get_client(client_id)
+            if client and hasattr(client, 'client_name'):
+                client_name = client.client_name
+
         # TODO: get this passed in
         target_url = "/consent"
 
@@ -118,9 +125,10 @@ class ConsentHandler:
 <body>
     <div class="consent-form">
         <h1>Authorization Request</h1>
-        <p>The application <strong>{client_id}</strong> is requesting access to your resources.</p>
+        <p>The application <strong>{client_name}</strong> is requesting access to your resources.</p>
 
         <div class="client-info">
+            <strong>Application Name:</strong> {client_name}<br>
             <strong>Client ID:</strong> {client_id}<br>
             <strong>Redirect URI:</strong> {redirect_uri}
         </div>
