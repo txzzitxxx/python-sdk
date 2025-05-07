@@ -11,8 +11,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response, HTMLResponse
-from dataclasses import dataclass
-
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.provider import (
@@ -76,8 +74,6 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
         # Store GitHub tokens with MCP tokens using the format:
         # {"mcp_token": "github_token"}
         self.token_mapping: dict[str, str] = {}
-        # Track which clients have been granted consent
-        self.client_consent: dict[str, bool] = {}
 
     async def get_client(self, client_id: str) -> OAuthClientInformationFull | None:
         """Get OAuth client information."""
@@ -86,14 +82,6 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
     async def register_client(self, client_info: OAuthClientInformationFull):
         """Register a new OAuth client."""
         self.clients[client_info.client_id] = client_info
-
-    async def has_client_consent(self, client: OAuthClientInformationFull) -> bool:
-        """Check if a client has already provided consent."""
-        return self.client_consent.get(client.client_id, False)
-
-    async def grant_client_consent(self, client: OAuthClientInformationFull) -> None:
-        """Grant consent for a client."""
-        self.client_consent[client.client_id] = True
 
     async def authorize(
         self, client: OAuthClientInformationFull, params: AuthorizationParams
@@ -277,8 +265,6 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
 
 class ConsentHandler:
 
-
-
     def __init__(self, provider: SimpleGitHubOAuthProvider, settings: ServerSettings, path: str):
         self.provider: SimpleGitHubOAuthProvider = provider
         self.settings: ServerSettings = settings
@@ -299,6 +285,7 @@ class ConsentHandler:
     async def _show_consent_form(self, request: Request) -> HTMLResponse:
         client_id = request.query_params.get("client_id", "")
         redirect_uri = request.query_params.get("redirect_uri", "")
+        # TODO: address csrf
         state = request.query_params.get("state", "")
         scopes = request.query_params.get("scopes", "")
         code_challenge = request.query_params.get("code_challenge", "")
