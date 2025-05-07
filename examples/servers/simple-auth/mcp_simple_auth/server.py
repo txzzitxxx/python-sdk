@@ -83,11 +83,11 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
     async def register_client(self, client_info: OAuthClientInformationFull):
         """Register a new OAuth client."""
         self.clients[client_info.client_id] = client_info
-        
+
     async def has_client_consent(self, client: OAuthClientInformationFull) -> bool:
         """Check if a client has already provided consent."""
         return self.client_consent.get(client.client_id, False)
-        
+
     async def grant_client_consent(self, client: OAuthClientInformationFull) -> None:
         """Grant consent for a client."""
         self.client_consent[client.client_id] = True
@@ -275,6 +275,9 @@ def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
             enabled=True,
             valid_scopes=[settings.mcp_scope],
             default_scopes=[settings.mcp_scope],
+            # Because we're redirecting to a different AS during our
+            # main auth flow.
+            client_consent_required=True
         ),
         required_scopes=[settings.mcp_scope],
     )
