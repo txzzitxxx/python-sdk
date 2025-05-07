@@ -1,5 +1,6 @@
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import urlencode
 
 from starlette.requests import Request
@@ -9,8 +10,27 @@ from mcp.server.auth.handlers.authorize import AuthorizationHandler
 from mcp.server.auth.provider import OAuthAuthorizationServerProvider
 
 
+class AbstractConsentHandler(ABC):
+    """Abstract base class for handling OAuth consent operations."""
+
+    @abstractmethod
+    async def handle(self, request: Request) -> Response:
+        """Handle consent requests - both showing the form and processing submissions."""
+        pass
+
+    @abstractmethod
+    async def _show_consent_form(self, request: Request) -> Response:
+        """Display the consent form to the user."""
+        pass
+
+    @abstractmethod
+    async def _process_consent(self, request: Request) -> Response:
+        """Process the user's consent decision."""
+        pass
+
+
 @dataclass
-class ConsentHandler:
+class ConsentHandler(AbstractConsentHandler):
     provider: OAuthAuthorizationServerProvider[Any, Any, Any]
 
     async def handle(self, request: Request) -> Response:
@@ -157,7 +177,7 @@ class ConsentHandler:
 """
         return HTMLResponse(content=html_content)
 
-    async def _process_consent(self, request: Request) -> RedirectResponse:
+    async def _process_consent(self, request: Request) -> RedirectResponse | HTMLResponse:
         form_data = await request.form()
         action = form_data.get("action")
 
