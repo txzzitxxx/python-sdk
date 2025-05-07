@@ -1,7 +1,6 @@
 import logging
 from dataclasses import dataclass
 from typing import Any, Literal
-from urllib.parse import urlencode
 
 from pydantic import AnyHttpUrl, AnyUrl, BaseModel, Field, RootModel, ValidationError
 from starlette.datastructures import FormData, QueryParams

@@ -127,8 +127,6 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
         }
 
         consent_url = f"{self.settings.server_url}consent?{urlencode(consent_params)}"
-        print(f"[DEBUGG] {consent_url}  {state}")
-
         return consent_url
 
     async def handle_github_callback(self, code: str, state: str) -> str:
@@ -277,10 +275,15 @@ class SimpleGitHubOAuthProvider(OAuthAuthorizationServerProvider):
             del self.tokens[token]
 
 
-@dataclass
 class ConsentHandler:
-    provider: OAuthAuthorizationServerProvider[Any, Any, Any]
-    settings: ServerSettings
+
+
+
+    def __init__(self, provider: SimpleGitHubOAuthProvider, settings: ServerSettings, path: str):
+        self.provider: SimpleGitHubOAuthProvider = provider
+        self.settings: ServerSettings = settings
+        self.client_consent: dict[str, bool] = {}
+        self.path = path
 
     async def handle(self, request: Request) -> Response:
         # This handles both showing the consent form (GET) and processing consent (POST)
@@ -308,11 +311,11 @@ class ConsentHandler:
             if client and hasattr(client, 'client_name'):
                 client_name = client.client_name
 
-        # TODO: get this passed in
-        target_url = "/consent"
+        target_url = self.path
+
+        # TODO: allow skipping consent if we've already approved this client ID
 
         # Create a simple consent form
-
         html_content = f"""
 <!DOCTYPE html>
 <html>
@@ -436,9 +439,7 @@ class ConsentHandler:
             if client_id:
                 client = await self.provider.get_client(client_id)
                 if client:
-                    # TODO: move this out of provider
-                    await self.provider.grant_client_consent(client)
-
+                    self.client_consent[client.client_id] = True
 
             auth_url = (
                 f"{self.settings.github_auth_url}"
@@ -505,8 +506,6 @@ def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
             enabled=True,
             valid_scopes=[settings.mcp_scope],
             default_scopes=[settings.mcp_scope],
-            # Turning off consent since we'll handle it via custom endpoint
-            client_consent_required=False
         ),
         required_scopes=[settings.mcp_scope],
     )
@@ -521,9 +520,10 @@ def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
         auth=auth_settings,
     )
 
-    consent_handler = ConsentHandler(provider=oauth_provider, settings=settings)
+    consent_path = "/consent"
+    consent_handler = ConsentHandler(provider=oauth_provider, settings=settings, path=consent_path)
 
-    @app.custom_route("/consent", methods=["GET", "POST"])
+    @app.custom_route(consent_path, methods=["GET", "POST"])
     async def example_consent_handler(request: Request) -> Response:
         return await consent_handler.handle(request)
 
