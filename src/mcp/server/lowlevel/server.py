@@ -543,7 +543,7 @@ class Server(Generic[LifespanResultT, RequestT]):
                     await self._handle_notification(notify)
 
             for warning in w:
-                logger.info(
+                logger.warning(
                     "Warning: %s: %s", warning.category.__name__, warning.message
                 )
 
@@ -555,7 +555,7 @@ class Server(Generic[LifespanResultT, RequestT]):
         lifespan_context: LifespanResultT,
         raise_exceptions: bool,
     ):
-        logger.info("Processing request of type %s", type(req).__name__)
+        logger.debug("Processing request of type %s", type(req).__name__)
         if handler := self.request_handlers.get(type(req)):  # type: ignore
             logger.debug("Dispatching request of type %s", type(req).__name__)
 
