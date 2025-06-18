@@ -21,3 +21,11 @@ class AuthSettings(BaseModel):
     client_registration_options: ClientRegistrationOptions | None = None
     revocation_options: RevocationOptions | None = None
     required_scopes: list[str] | None = None
+    resource_url: AnyHttpUrl | None = Field(
+        None,
+        description="URL of the protected resource for RFC 9728 metadata discovery",
+    )
+    resource_name: str | None = Field(
+        None,
+        description="Name of the protected resource",
+    )

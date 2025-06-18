@@ -23,6 +23,7 @@ from mcp.shared.auth import (
     OAuthClientMetadata,
     OAuthMetadata,
     OAuthToken,
+    ProtectedResourceMetadata,
 )
 from mcp.types import LATEST_PROTOCOL_VERSION
 
@@ -119,6 +120,42 @@ class OAuthClientProvider(httpx.Auth):
         parsed = urlparse(server_url)
         # Remove path component
         return urlunparse((parsed.scheme, parsed.netloc, "", "", "", ""))
+
+    async def _discover_protected_resource_metadata(self, server_url: str) -> ProtectedResourceMetadata | None:
+        """
+        Discover protected resource metadata from server's well-known endpoint.
+        RFC 9728 Protected Resource Metadata.
+        """
+        # Extract base URL per MCP spec
+        auth_base_url = self._get_authorization_base_url(server_url)
+        url = urljoin(auth_base_url, "/.well-known/oauth-protected-resource")
+        headers = {MCP_PROTOCOL_VERSION: LATEST_PROTOCOL_VERSION}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.get(url, headers=headers)
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                metadata_json = response.json()
+                logger.debug(f"Protected resource metadata discovered: {metadata_json}")
+                return ProtectedResourceMetadata.model_validate(metadata_json)
+            except TypeError:
+                # Retry without MCP header for CORS compatibility
+                try:
+                    response = await client.get(url)
+                    if response.status_code == 404:
+                        return None
+                    response.raise_for_status()
+                    metadata_json = response.json()
+                    logger.debug(f"Protected resource metadata discovered (no MCP header): {metadata_json}")
+                    return ProtectedResourceMetadata.model_validate(metadata_json)
+                except Exception:
+                    logger.exception("Failed to discover protected resource metadata")
+                    return None
+            except Exception:
+                logger.exception("Failed to discover protected resource metadata")
+                return None
 
     async def _discover_oauth_metadata(self, server_url: str) -> OAuthMetadata | None:
         """
@@ -301,7 +338,16 @@ class OAuthClientProvider(httpx.Auth):
         """Execute OAuth2 authorization code flow with PKCE."""
         logger.debug("Starting authentication flow.")
 
-        # Discover OAuth metadata
+        # Try protected resource metadata discovery first (RFC 9728)
+        if not self._metadata:
+            protected_resource_metadata = await self._discover_protected_resource_metadata(self.server_url)
+            if protected_resource_metadata and protected_resource_metadata.authorization_servers:
+                # Use the first authorization server
+                auth_server_url = str(protected_resource_metadata.authorization_servers[0])
+                self._metadata = await self._discover_oauth_metadata(auth_server_url)
+                logger.debug(f"Using authorization server from protected resource metadata: {auth_server_url}")
+
+        # Fallback to direct authorization server discovery
         if not self._metadata:
             self._metadata = await self._discover_oauth_metadata(self.server_url)
 
@@ -330,7 +376,6 @@ class OAuthClientProvider(httpx.Auth):
             "code_challenge": self._code_challenge,
             "code_challenge_method": "S256",
         }
-
         # Include explicit scopes only
         if self.client_metadata.scope:
             auth_params["scope"] = self.client_metadata.scope

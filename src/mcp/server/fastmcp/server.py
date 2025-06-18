@@ -727,6 +727,8 @@ class FastMCP:
                     service_documentation_url=self.settings.auth.service_documentation_url,
                     client_registration_options=self.settings.auth.client_registration_options,
                     revocation_options=self.settings.auth.revocation_options,
+                    resource_url=self.settings.auth.resource_url,
+                    resource_name=self.settings.auth.resource_name,
                 )
             )
 
@@ -819,6 +821,8 @@ class FastMCP:
                     service_documentation_url=self.settings.auth.service_documentation_url,
                     client_registration_options=self.settings.auth.client_registration_options,
                     revocation_options=self.settings.auth.revocation_options,
+                    resource_url=self.settings.auth.resource_url,
+                    resource_name=self.settings.auth.resource_name,
                 )
             )
             routes.append(

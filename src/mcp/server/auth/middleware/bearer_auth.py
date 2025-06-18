@@ -1,6 +1,7 @@
 import time
 from typing import Any
 
+from pydantic import AnyHttpUrl
 from starlette.authentication import AuthCredentials, AuthenticationBackend, SimpleUser
 from starlette.exceptions import HTTPException
 from starlette.requests import HTTPConnection
@@ -59,17 +60,26 @@ class RequireAuthMiddleware:
     auth info in the request state.
     """
 
-    def __init__(self, app: Any, required_scopes: list[str]):
+    def __init__(
+        self,
+        app: Any,
+        required_scopes: list[str],
+        resource_metadata_url: AnyHttpUrl | None = None,
+        realm: str | None = None,
+    ):
         """
         Initialize the middleware.
 
         Args:
             app: ASGI application
-            provider: Authentication provider to validate tokens
-            required_scopes: Optional list of scopes that the token must have
+            required_scopes: List of scopes that the token must have
+            resource_metadata_url: Optional protected resource metadata URL for WWW-Authenticate header
+            realm: Optional realm for WWW-Authenticate header
         """
         self.app = app
         self.required_scopes = required_scopes
+        self.resource_metadata_url = resource_metadata_url
+        self.realm = realm or "mcp"
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         auth_user = scope.get("user")

@@ -1,91 +1,121 @@
-# Simple MCP Server with GitHub OAuth Authentication
+# MCP OAuth Authentication Demo
 
-This is a simple example of an MCP server with GitHub OAuth authentication. It demonstrates the essential components needed for OAuth integration with just a single tool.
+This example demonstrates OAuth 2.0 authentication with the Model Context Protocol using **separate Authorization Server (AS) and Resource Server (RS)** to comply with the new RFC 9728 specification.
 
-This is just an example of a server that uses auth, an official GitHub mcp server is [here](https://github.com/github/github-mcp-server)
+---
 
-## Overview
+## Setup Requirements
 
-This simple demo to show to set up a server with:
-- GitHub OAuth2 authorization flow
-- Single tool: `get_user_profile` to retrieve GitHub user information
+**Create a GitHub OAuth App:**
+- Go to GitHub Settings > Developer settings > OAuth Apps > New OAuth App
+- **Authorization callback URL:** `http://localhost:9000/github/callback`
+- Note down your **Client ID** and **Client Secret**
 
-
-## Prerequisites
-
-1. Create a GitHub OAuth App:
-   - Go to GitHub Settings > Developer settings > OAuth Apps > New OAuth App
-   - Application name: Any name (e.g., "Simple MCP Auth Demo")
-   - Homepage URL: `http://localhost:8000`
-   - Authorization callback URL: `http://localhost:8000/github/callback`
-   - Click "Register application"
-   - Note down your Client ID and Client Secret
-
-## Required Environment Variables
-
-You MUST set these environment variables before running the server:
-
+**Set environment variables:**
 ```bash
-export MCP_GITHUB_GITHUB_CLIENT_ID="your_client_id_here"
-export MCP_GITHUB_GITHUB_CLIENT_SECRET="your_client_secret_here"
+export MCP_GITHUB_CLIENT_ID="your_client_id_here"  
+export MCP_GITHUB_CLIENT_SECRET="your_client_secret_here"
 ```
 
-The server will not start without these environment variables properly set.
+---
 
+## Running the Servers
 
-## Running the Server
+### Step 1: Start Authorization Server
 
 ```bash
-# Set environment variables first (see above)
+# Navigate to the simple-auth directory
+cd /Users/inna/code/mcp/python-sdk/examples/servers/simple-auth
 
-# Run the server
-uv run mcp-simple-auth
+# Start Authorization Server on port 9000
+python -m mcp_simple_auth.auth_server --port=9000
 ```
 
-The server will start on `http://localhost:8000`.
+**What it provides:**
+- OAuth 2.0 flows (registration, authorization, token exchange)
+- GitHub OAuth integration for user authentication
+- Token introspection endpoint for Resource Servers (`/introspect`)
+- User data proxy endpoint (`/github/user`)
 
-### Transport Options
+---
 
-This server supports multiple transport protocols that can run on the same port:
+### Step 2: Start Resource Server (MCP Server)
 
-#### SSE (Server-Sent Events) - Default
 ```bash
-uv run mcp-simple-auth
-# or explicitly:
-uv run mcp-simple-auth --transport sse
+# In another terminal, navigate to the simple-auth directory
+cd /Users/inna/code/mcp/python-sdk/examples/servers/simple-auth
+
+# Start Resource Server on port 8001, connected to Authorization Server
+python -m mcp_simple_auth.server --port=8001 --auth-server=http://localhost:9000  --transport=streamable-http
 ```
 
-SSE transport provides endpoint:
-- `/sse`
 
-#### Streamable HTTP
+### Step 3: Test with Client
+
 ```bash
-uv run mcp-simple-auth --transport streamable-http
+# Start Resource Server with streamable HTTP
+python -m mcp_simple_auth.server --port=8001 --auth-server=http://localhost:9000 --transport=streamable-http
+
+# Start client with streamable HTTP  
+MCP_SERVER_PORT=8001 MCP_TRANSPORT_TYPE=streamable_http python -m mcp_simple_auth_client.main
 ```
 
-Streamable HTTP transport provides endpoint:
-- `/mcp`
 
+## How It Works
 
-This ensures backward compatibility without needing multiple server instances. When using SSE transport (`--transport sse`), only the `/sse` endpoint is available.
+### RFC 9728 Discovery
 
-## Available Tool
+**Client → Resource Server:**
+```bash
+curl http://localhost:8001/.well-known/oauth-protected-resource
+```
+```json
+{
+  "resource": "http://localhost:8001",
+  "authorization_servers": ["http://localhost:9000"]
+}
+```
 
-### get_user_profile
+**Client → Authorization Server:**
+```bash
+curl http://localhost:9000/.well-known/oauth-authorization-server
+```
+```json
+{
+  "issuer": "http://localhost:9000",
+  "authorization_endpoint": "http://localhost:9000/authorize",
+  "token_endpoint": "http://localhost:9000/token"
+}
+```
 
-The only tool in this simple example. Returns the authenticated user's GitHub profile information.
+## Manual Testing
 
-**Required scope**: `user`
+### Test Discovery
+```bash
+# Test Resource Server discovery endpoint
+curl -v http://localhost:8001/.well-known/oauth-protected-resource
 
-**Returns**: GitHub user profile data including username, email, bio, etc.
+# Test Authorization Server metadata
+curl -v http://localhost:9000/.well-known/oauth-authorization-server
+```
 
+### Test Token Introspection
+```bash
+# After getting a token through OAuth flow:
+curl -X POST http://localhost:9000/introspect \
+  -H "Content-Type: application/x-www-form-urlencoded" \
+  -d "token=your_access_token"
+```
 
 ## Troubleshooting
 
-If the server fails to start, check:
-1. Environment variables `MCP_GITHUB_GITHUB_CLIENT_ID` and `MCP_GITHUB_GITHUB_CLIENT_SECRET` are set
-2. The GitHub OAuth app callback URL matches `http://localhost:8000/github/callback`
-3. No other service is using port 8000
-4. The transport specified is valid (`sse` or `streamable-http`)
+| **Issue** | **Solution** |
+|-----------|-------------|
+| "Environment variables not set" | Set `MCP_GITHUB_CLIENT_ID` and `MCP_GITHUB_CLIENT_SECRET` |
+| "Port already in use" | Change port: `--port=8001` |
+| "GitHub callback failed" | Update GitHub app callback to `http://localhost:9000/github/callback` |
+| "Token introspection failed" | Start Authorization Server first |
+| "Client can't discover Authorization Server" | Check Resource Server is configured with `--auth-server` |
+| "ModuleNotFoundError: No module named 'mcp_simple_auth'" | Run commands from the `simple-auth` directory as shown above |
+| "Resource Server exits immediately" | **Fixed:** This issue was caused by FastMCP auth configuration. The current version should work correctly. |
 
-You can use [Inspector](https://github.com/modelcontextprotocol/inspector) to test Auth

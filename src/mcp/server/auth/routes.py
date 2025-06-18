@@ -9,7 +9,7 @@ from starlette.routing import Route, request_response  # type: ignore
 from starlette.types import ASGIApp
 
 from mcp.server.auth.handlers.authorize import AuthorizationHandler
-from mcp.server.auth.handlers.metadata import MetadataHandler
+from mcp.server.auth.handlers.metadata import MetadataHandler, ProtectedResourceMetadataHandler
 from mcp.server.auth.handlers.register import RegistrationHandler
 from mcp.server.auth.handlers.revoke import RevocationHandler
 from mcp.server.auth.handlers.token import TokenHandler
@@ -17,7 +17,7 @@ from mcp.server.auth.middleware.client_auth import ClientAuthenticator
 from mcp.server.auth.provider import OAuthAuthorizationServerProvider
 from mcp.server.auth.settings import ClientRegistrationOptions, RevocationOptions
 from mcp.server.streamable_http import MCP_PROTOCOL_VERSION_HEADER
-from mcp.shared.auth import OAuthMetadata
+from mcp.shared.auth import OAuthMetadata, ProtectedResourceMetadata
 
 
 def validate_issuer_url(url: AnyHttpUrl):
@@ -67,6 +67,8 @@ def create_auth_routes(
     service_documentation_url: AnyHttpUrl | None = None,
     client_registration_options: ClientRegistrationOptions | None = None,
     revocation_options: RevocationOptions | None = None,
+    resource_url: AnyHttpUrl | None = None,
+    resource_name: str | None = None,
 ) -> list[Route]:
     validate_issuer_url(issuer_url)
 
@@ -93,22 +95,47 @@ def create_auth_routes(
             ),
             methods=["GET", "OPTIONS"],
         ),
-        Route(
-            AUTHORIZATION_PATH,
-            # do not allow CORS for authorization endpoint;
-            # clients should just redirect to this
-            endpoint=AuthorizationHandler(provider).handle,
-            methods=["GET", "POST"],
-        ),
-        Route(
-            TOKEN_PATH,
-            endpoint=cors_middleware(
-                TokenHandler(provider, client_authenticator).handle,
-                ["POST", "OPTIONS"],
-            ),
-            methods=["POST", "OPTIONS"],
-        ),
     ]
+
+    # Add protected resource metadata endpoint if resource is configured
+    if resource_url:
+        protected_resource_metadata = build_protected_resource_metadata(
+            resource_url,
+            issuer_url,
+            client_registration_options,
+            resource_name,
+        )
+        routes.append(
+            Route(
+                "/.well-known/oauth-protected-resource",
+                endpoint=cors_middleware(
+                    ProtectedResourceMetadataHandler(protected_resource_metadata).handle,
+                    ["GET", "OPTIONS"],
+                ),
+                methods=["GET", "OPTIONS"],
+            )
+        )
+
+    # Add remaining auth routes
+    routes.extend(
+        [
+            Route(
+                AUTHORIZATION_PATH,
+                # do not allow CORS for authorization endpoint;
+                # clients should just redirect to this
+                endpoint=AuthorizationHandler(provider).handle,
+                methods=["GET", "POST"],
+            ),
+            Route(
+                TOKEN_PATH,
+                endpoint=cors_middleware(
+                    TokenHandler(provider, client_authenticator).handle,
+                    ["POST", "OPTIONS"],
+                ),
+                methods=["POST", "OPTIONS"],
+            ),
+        ]
+    )
 
     if client_registration_options.enabled:
         registration_handler = RegistrationHandler(
@@ -178,5 +205,38 @@ def build_metadata(
     if revocation_options.enabled:
         metadata.revocation_endpoint = AnyHttpUrl(str(issuer_url).rstrip("/") + REVOCATION_PATH)
         metadata.revocation_endpoint_auth_methods_supported = ["client_secret_post"]
+
+    return metadata
+
+
+def build_protected_resource_metadata(
+    resource_url: AnyHttpUrl,
+    issuer_url: AnyHttpUrl,
+    client_registration_options: ClientRegistrationOptions,
+    resource_name: str | None = None,
+) -> ProtectedResourceMetadata:
+    """
+    Build protected resource metadata according to RFC 9728.
+
+    Args:
+        resource_url: The resource server URL
+        issuer_url: The authorization server URL
+        client_registration_options: Client registration options for scopes
+        resource_name: Optional resource name
+
+    Returns:
+        ProtectedResourceMetadata: The protected resource metadata
+    """
+    metadata = ProtectedResourceMetadata(
+        resource=resource_url,
+        authorization_servers=[issuer_url],
+        scopes_supported=client_registration_options.valid_scopes,
+        bearer_methods_supported=["header"],
+    )
+
+    if resource_name:
+        # Set resource documentation URL if resource name is provided
+        # This could be enhanced to include actual documentation URLs
+        pass
 
     return metadata
