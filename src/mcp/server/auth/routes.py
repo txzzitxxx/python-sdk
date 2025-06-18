@@ -93,28 +93,22 @@ def create_auth_routes(
             ),
             methods=["GET", "OPTIONS"],
         ),
+        Route(
+            AUTHORIZATION_PATH,
+            # do not allow CORS for authorization endpoint;
+            # clients should just redirect to this
+            endpoint=AuthorizationHandler(provider).handle,
+            methods=["GET", "POST"],
+        ),
+        Route(
+            TOKEN_PATH,
+            endpoint=cors_middleware(
+                TokenHandler(provider, client_authenticator).handle,
+                ["POST", "OPTIONS"],
+            ),
+            methods=["POST", "OPTIONS"],
+        ),
     ]
-
-    # Add remaining auth routes
-    routes.extend(
-        [
-            Route(
-                AUTHORIZATION_PATH,
-                # do not allow CORS for authorization endpoint;
-                # clients should just redirect to this
-                endpoint=AuthorizationHandler(provider).handle,
-                methods=["GET", "POST"],
-            ),
-            Route(
-                TOKEN_PATH,
-                endpoint=cors_middleware(
-                    TokenHandler(provider, client_authenticator).handle,
-                    ["POST", "OPTIONS"],
-                ),
-                methods=["POST", "OPTIONS"],
-            ),
-        ]
-    )
 
     if client_registration_options.enabled:
         registration_handler = RegistrationHandler(
@@ -195,27 +189,27 @@ def create_protected_resource_routes(
 ) -> list[Route]:
     """
     Create routes for OAuth 2.0 Protected Resource Metadata (RFC 9728).
-    
+
     Args:
         resource_url: The URL of this resource server
         authorization_servers: List of authorization servers that can issue tokens
         scopes_supported: Optional list of scopes supported by this resource
-        
+
     Returns:
         List of Starlette routes for protected resource metadata
     """
     from mcp.server.auth.handlers.metadata import ProtectedResourceMetadataHandler
     from mcp.shared.auth import ProtectedResourceMetadata
-    
+
     metadata = ProtectedResourceMetadata(
         resource=resource_url,
         authorization_servers=authorization_servers,
         scopes_supported=scopes_supported,
         # bearer_methods_supported defaults to ["header"] in the model
     )
-    
+
     handler = ProtectedResourceMetadataHandler(metadata)
-    
+
     return [
         Route(
             "/.well-known/oauth-protected-resource",
