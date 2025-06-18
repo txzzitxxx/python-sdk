@@ -125,7 +125,7 @@ def create_resource_server(settings: ResourceServerSettings) -> FastMCP:
         host=settings.host,
         port=settings.port,
         debug=True,
-        # No auth settings - we'll handle authentication with custom middleware
+        # No auth settings - this is RS, not AS
     )
 
     # Add the protected resource metadata route using FastMCP's custom_route
