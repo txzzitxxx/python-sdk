@@ -8,7 +8,6 @@ from typing import Any, cast
 import pytest
 from starlette.authentication import AuthCredentials
 from starlette.datastructures import Headers
-from starlette.exceptions import HTTPException
 from starlette.requests import Request
 from starlette.types import Message, Receive, Scope, Send
 
@@ -288,14 +287,18 @@ class TestRequireAuthMiddleware:
         async def receive() -> Message:
             return {"type": "http.request"}
 
+        sent_messages = []
+
         async def send(message: Message) -> None:
-            pass
+            sent_messages.append(message)
 
-        with pytest.raises(HTTPException) as excinfo:
-            await middleware(scope, receive, send)
+        await middleware(scope, receive, send)
 
-        assert excinfo.value.status_code == 401
-        assert excinfo.value.detail == "Unauthorized"
+        # Check that a 401 response was sent
+        assert len(sent_messages) == 2
+        assert sent_messages[0]["type"] == "http.response.start"
+        assert sent_messages[0]["status"] == 401
+        assert any(h[0] == b"www-authenticate" for h in sent_messages[0]["headers"])
         assert not app.called
 
     async def test_non_authenticated_user(self):
@@ -308,14 +311,18 @@ class TestRequireAuthMiddleware:
         async def receive() -> Message:
             return {"type": "http.request"}
 
+        sent_messages = []
+
         async def send(message: Message) -> None:
-            pass
+            sent_messages.append(message)
 
-        with pytest.raises(HTTPException) as excinfo:
-            await middleware(scope, receive, send)
+        await middleware(scope, receive, send)
 
-        assert excinfo.value.status_code == 401
-        assert excinfo.value.detail == "Unauthorized"
+        # Check that a 401 response was sent
+        assert len(sent_messages) == 2
+        assert sent_messages[0]["type"] == "http.response.start"
+        assert sent_messages[0]["status"] == 401
+        assert any(h[0] == b"www-authenticate" for h in sent_messages[0]["headers"])
         assert not app.called
 
     async def test_missing_required_scope(self, valid_access_token: AccessToken):
@@ -333,14 +340,18 @@ class TestRequireAuthMiddleware:
         async def receive() -> Message:
             return {"type": "http.request"}
 
+        sent_messages = []
+
         async def send(message: Message) -> None:
-            pass
+            sent_messages.append(message)
 
-        with pytest.raises(HTTPException) as excinfo:
-            await middleware(scope, receive, send)
+        await middleware(scope, receive, send)
 
-        assert excinfo.value.status_code == 403
-        assert excinfo.value.detail == "Insufficient scope"
+        # Check that a 403 response was sent
+        assert len(sent_messages) == 2
+        assert sent_messages[0]["type"] == "http.response.start"
+        assert sent_messages[0]["status"] == 403
+        assert any(h[0] == b"www-authenticate" for h in sent_messages[0]["headers"])
         assert not app.called
 
     async def test_no_auth_credentials(self, valid_access_token: AccessToken):
@@ -357,14 +368,18 @@ class TestRequireAuthMiddleware:
         async def receive() -> Message:
             return {"type": "http.request"}
 
+        sent_messages = []
+
         async def send(message: Message) -> None:
-            pass
+            sent_messages.append(message)
 
-        with pytest.raises(HTTPException) as excinfo:
-            await middleware(scope, receive, send)
+        await middleware(scope, receive, send)
 
-        assert excinfo.value.status_code == 403
-        assert excinfo.value.detail == "Insufficient scope"
+        # Check that a 403 response was sent
+        assert len(sent_messages) == 2
+        assert sent_messages[0]["type"] == "http.response.start"
+        assert sent_messages[0]["status"] == 403
+        assert any(h[0] == b"www-authenticate" for h in sent_messages[0]["headers"])
         assert not app.called
 
     async def test_has_required_scopes(self, valid_access_token: AccessToken):

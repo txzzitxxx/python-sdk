@@ -788,7 +788,7 @@ class FastMCP:
         # Add protected resource metadata endpoint if configured as RS
         if self.settings.auth and self.settings.auth.authorization_servers:
             from mcp.server.auth.routes import create_protected_resource_routes
-            
+
             routes.extend(
                 create_protected_resource_routes(
                     resource_url=self.settings.auth.issuer_url,
