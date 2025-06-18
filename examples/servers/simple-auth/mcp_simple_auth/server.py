@@ -15,15 +15,11 @@ import click
 import httpx
 from pydantic import AnyHttpUrl
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from starlette.authentication import AuthCredentials, AuthenticationBackend
-from starlette.requests import HTTPConnection
-from starlette.responses import JSONResponse
 
 from mcp.server.auth.middleware.auth_context import get_access_token
-from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
-from mcp.server.auth.provider import AccessToken
+from mcp.server.auth.settings import AuthSettings
+from mcp.server.auth.token_verifier import IntrospectionTokenVerifier
 from mcp.server.fastmcp.server import FastMCP
-from mcp.shared.auth import ProtectedResourceMetadata
 
 logger = logging.getLogger(__name__)
 
@@ -51,63 +47,6 @@ class ResourceServerSettings(BaseSettings):
         super().__init__(**data)
 
 
-class TokenIntrospectionAuthBackend(AuthenticationBackend):
-    """
-    Authentication backend for Resource Server that validates tokens via AS introspection.
-
-    This backend:
-    1. Extracts Bearer tokens from Authorization header
-    2. Calls Authorization Server's introspection endpoint
-    3. Creates AuthenticatedUser from token info
-    """
-
-    def __init__(self, settings: ResourceServerSettings):
-        self.settings = settings
-        self.introspection_endpoint = settings.auth_server_introspection_endpoint
-
-    async def authenticate(self, conn: HTTPConnection):
-        auth_header = next(
-            (conn.headers.get(key) for key in conn.headers if key.lower() == "authorization"),
-            None,
-        )
-        if not auth_header or not auth_header.lower().startswith("bearer "):
-            return None
-
-        token = auth_header[7:]  # Remove "Bearer " prefix
-
-        # Introspect token with Authorization Server
-        async with httpx.AsyncClient() as client:
-            try:
-                response = await client.post(
-                    self.introspection_endpoint,
-                    data={"token": token},
-                    headers={"Content-Type": "application/x-www-form-urlencoded"},
-                )
-
-                if response.status_code != 200:
-                    logger.debug(f"Token introspection failed with status {response.status_code}")
-                    return None
-
-                data = response.json()
-                if not data.get("active", False):
-                    logger.debug("Token is not active")
-                    return None
-
-                # Create auth info from introspection response
-                auth_info = AccessToken(
-                    token=token,
-                    client_id=data.get("client_id", "unknown"),
-                    scopes=data.get("scope", "").split() if data.get("scope") else [],
-                    expires_at=data.get("exp"),
-                )
-
-                return AuthCredentials(auth_info.scopes), AuthenticatedUser(auth_info)
-
-            except Exception:
-                logger.exception("Token introspection failed")
-                return None
-
-
 def create_resource_server(settings: ResourceServerSettings) -> FastMCP:
     """
     Create MCP Resource Server with token introspection.
@@ -117,35 +56,24 @@ def create_resource_server(settings: ResourceServerSettings) -> FastMCP:
     2. Validates tokens via Authorization Server introspection
     3. Serves MCP tools and resources
     """
-    # Create FastMCP server WITHOUT auth settings (since we'll use custom middleware)
-    # This avoids the FastMCP validation error that requires auth_server_provider
+    # Create token verifier for introspection
+    token_verifier = IntrospectionTokenVerifier(settings.auth_server_introspection_endpoint)
+
+    # Create FastMCP server as a Resource Server
     app = FastMCP(
         name="MCP Resource Server",
         instructions="Resource Server that validates tokens via Authorization Server introspection",
         host=settings.host,
         port=settings.port,
         debug=True,
-        # No auth settings - this is RS, not AS
-    )
-
-    # Add the protected resource metadata route using FastMCP's custom_route
-    @app.custom_route("/.well-known/oauth-protected-resource", methods=["GET", "OPTIONS"])
-    async def protected_resource_metadata(_request):
-        """Handle requests for protected resource metadata."""
-        metadata = ProtectedResourceMetadata(
-            resource=settings.server_url,
+        # Auth configuration for RS mode
+        token_verifier=token_verifier,
+        auth=AuthSettings(
+            issuer_url=settings.server_url,
+            required_scopes=[settings.mcp_scope],
             authorization_servers=[settings.auth_server_url],
-            scopes_supported=[settings.mcp_scope],
-            bearer_methods_supported=["header"],
-        )
-        # Convert to dict with string URLs for JSON serialization
-        response_data = {
-            "resource": str(metadata.resource),
-            "authorization_servers": [str(url) for url in metadata.authorization_servers],
-            "scopes_supported": metadata.scopes_supported,
-            "bearer_methods_supported": metadata.bearer_methods_supported,
-        }
-        return JSONResponse(response_data)
+        ),
+    )
 
     async def get_github_user_data() -> dict[str, Any]:
         """

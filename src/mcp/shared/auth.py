@@ -140,5 +140,5 @@ class ProtectedResourceMetadata(BaseModel):
     resource: AnyHttpUrl
     authorization_servers: list[AnyHttpUrl] = Field(..., min_length=1)
     scopes_supported: list[str] | None = None
-    bearer_methods_supported: list[str] | None = None
+    bearer_methods_supported: list[str] | None = Field(default=["header"])  # MCP only supports header method
     resource_documentation: AnyHttpUrl | None = None

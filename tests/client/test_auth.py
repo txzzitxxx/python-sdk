@@ -1326,7 +1326,7 @@ class TestBackwardsCompatibility:
     @pytest.mark.anyio
     async def test_legacy_discovery_fallback(self, oauth_provider, oauth_metadata):
         """Test that legacy auth flow discovery fallback works when protected resource metadata is not available."""
-        
+
         with (
             patch.object(oauth_provider, "_discover_protected_resource_metadata") as mock_pr_discovery,
             patch.object(oauth_provider, "_discover_oauth_metadata") as mock_oauth_discovery,
@@ -1341,10 +1341,10 @@ class TestBackwardsCompatibility:
             # This avoids state parameter mismatch issues in the full OAuth flow
             protected_metadata = await oauth_provider._discover_protected_resource_metadata(oauth_provider.server_url)
             assert protected_metadata is None  # Legacy server doesn't support RFC 9728
-            
+
             auth_metadata = await oauth_provider._discover_oauth_metadata(oauth_provider.server_url)
             assert auth_metadata == oauth_metadata  # Falls back to direct discovery
-            
+
             # Verify legacy discovery path was used
             mock_pr_discovery.assert_called_once()
             mock_oauth_discovery.assert_called_once_with(oauth_provider.server_url)

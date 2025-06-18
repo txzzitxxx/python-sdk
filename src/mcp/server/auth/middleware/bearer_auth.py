@@ -1,13 +1,14 @@
+import json
 import time
 from typing import Any
 
 from pydantic import AnyHttpUrl
 from starlette.authentication import AuthCredentials, AuthenticationBackend, SimpleUser
-from starlette.exceptions import HTTPException
 from starlette.requests import HTTPConnection
 from starlette.types import Receive, Scope, Send
 
-from mcp.server.auth.provider import AccessToken, OAuthAuthorizationServerProvider
+from mcp.server.auth.provider import AccessToken
+from mcp.server.auth.token_verifier import TokenVerifier
 
 
 class AuthenticatedUser(SimpleUser):
@@ -21,14 +22,11 @@ class AuthenticatedUser(SimpleUser):
 
 class BearerAuthBackend(AuthenticationBackend):
     """
-    Authentication backend that validates Bearer tokens.
+    Authentication backend that validates Bearer tokens using a TokenVerifier.
     """
 
-    def __init__(
-        self,
-        provider: OAuthAuthorizationServerProvider[Any, Any, Any],
-    ):
-        self.provider = provider
+    def __init__(self, token_verifier: TokenVerifier):
+        self.token_verifier = token_verifier
 
     async def authenticate(self, conn: HTTPConnection):
         auth_header = next(
@@ -40,8 +38,8 @@ class BearerAuthBackend(AuthenticationBackend):
 
         token = auth_header[7:]  # Remove "Bearer " prefix
 
-        # Validate the token with the provider
-        auth_info = await self.provider.load_access_token(token)
+        # Validate the token with the verifier
+        auth_info = await self.token_verifier.verify_token(token)
 
         if not auth_info:
             return None
@@ -65,7 +63,6 @@ class RequireAuthMiddleware:
         app: Any,
         required_scopes: list[str],
         resource_metadata_url: AnyHttpUrl | None = None,
-        realm: str | None = None,
     ):
         """
         Initialize the middleware.
@@ -74,22 +71,57 @@ class RequireAuthMiddleware:
             app: ASGI application
             required_scopes: List of scopes that the token must have
             resource_metadata_url: Optional protected resource metadata URL for WWW-Authenticate header
-            realm: Optional realm for WWW-Authenticate header
         """
         self.app = app
         self.required_scopes = required_scopes
         self.resource_metadata_url = resource_metadata_url
-        self.realm = realm or "mcp"
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         auth_user = scope.get("user")
         if not isinstance(auth_user, AuthenticatedUser):
-            raise HTTPException(status_code=401, detail="Unauthorized")
+            await self._send_auth_error(
+                send, status_code=401, error="invalid_token", description="Authentication required"
+            )
+            return
+
         auth_credentials = scope.get("auth")
 
         for required_scope in self.required_scopes:
             # auth_credentials should always be provided; this is just paranoia
             if auth_credentials is None or required_scope not in auth_credentials.scopes:
-                raise HTTPException(status_code=403, detail="Insufficient scope")
+                await self._send_auth_error(
+                    send, status_code=403, error="insufficient_scope", description=f"Required scope: {required_scope}"
+                )
+                return
 
         await self.app(scope, receive, send)
+
+    async def _send_auth_error(self, send: Send, status_code: int, error: str, description: str) -> None:
+        """Send an authentication error response with WWW-Authenticate header."""
+        # Build WWW-Authenticate header value
+        www_auth_parts = [f'error="{error}"', f'error_description="{description}"']
+        if self.resource_metadata_url:
+            www_auth_parts.append(f'resource_metadata="{self.resource_metadata_url}"')
+
+        www_authenticate = f"Bearer {', '.join(www_auth_parts)}"
+
+        # Send response
+        await send(
+            {
+                "type": "http.response.start",
+                "status": status_code,
+                "headers": [
+                    (b"content-type", b"application/json"),
+                    (b"www-authenticate", www_authenticate.encode()),
+                ],
+            }
+        )
+
+        # Send body
+        body = {"error": error, "error_description": description}
+        await send(
+            {
+                "type": "http.response.body",
+                "body": json.dumps(body).encode(),
+            }
+        )

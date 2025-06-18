@@ -325,8 +325,7 @@ def create_authorization_server(settings: AuthServerSettings) -> Starlette:
             default_scopes=[settings.mcp_scope],
         ),
         required_scopes=[settings.mcp_scope],
-        resource_url=settings.server_url,
-        resource_name="MCP Authorization Server",
+        authorization_servers=None,
     )
 
     # Create OAuth routes
@@ -336,8 +335,6 @@ def create_authorization_server(settings: AuthServerSettings) -> Starlette:
         service_documentation_url=auth_settings.service_documentation_url,
         client_registration_options=auth_settings.client_registration_options,
         revocation_options=auth_settings.revocation_options,
-        resource_url=settings.server_url,  # Enable protected resource metadata
-        resource_name="MCP Authorization Server",
     )
 
     # Add GitHub callback route
