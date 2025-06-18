@@ -106,16 +106,3 @@ curl -X POST http://localhost:9000/introspect \
   -H "Content-Type: application/x-www-form-urlencoded" \
   -d "token=your_access_token"
 ```
-
-## Troubleshooting
-
-| **Issue** | **Solution** |
-|-----------|-------------|
-| "Environment variables not set" | Set `MCP_GITHUB_CLIENT_ID` and `MCP_GITHUB_CLIENT_SECRET` |
-| "Port already in use" | Change port: `--port=8001` |
-| "GitHub callback failed" | Update GitHub app callback to `http://localhost:9000/github/callback` |
-| "Token introspection failed" | Start Authorization Server first |
-| "Client can't discover Authorization Server" | Check Resource Server is configured with `--auth-server` |
-| "ModuleNotFoundError: No module named 'mcp_simple_auth'" | Run commands from the `simple-auth` directory as shown above |
-| "Resource Server exits immediately" | **Fixed:** This issue was caused by FastMCP auth configuration. The current version should work correctly. |
-
