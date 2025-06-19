@@ -67,8 +67,6 @@ from mcp.types import Tool as MCPTool
 logger = get_logger(__name__)
 
 
-
-
 class Settings(BaseSettings, Generic[LifespanResultT]):
     """FastMCP server settings.
 

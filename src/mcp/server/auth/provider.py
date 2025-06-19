@@ -282,9 +282,9 @@ def construct_redirect_uri(redirect_uri_base: str, **params: str | None) -> str:
 
 class ProviderTokenVerifier:
     """Token verifier that uses an OAuthAuthorizationServerProvider.
-    
+
     This is provided for backwards compatibility with existing auth_server_provider
-    configurations. For new implementations using AS/RS separation, consider using 
+    configurations. For new implementations using AS/RS separation, consider using
     the TokenVerifier protocol with a dedicated implementation like IntrospectionTokenVerifier.
     """
 

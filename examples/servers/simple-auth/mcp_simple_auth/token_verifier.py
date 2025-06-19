@@ -1,6 +1,7 @@
 """Example token verifier implementation using OAuth 2.0 Token Introspection (RFC 7662)."""
 
 import logging
+
 from mcp.server.auth.provider import AccessToken
 
 logger = logging.getLogger(__name__)
@@ -8,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 class IntrospectionTokenVerifier:
     """Example token verifier that uses OAuth 2.0 Token Introspection (RFC 7662).
-    
+
     This is a simple example implementation for demonstration purposes.
     Production implementations should consider:
     - Connection pooling and reuse
@@ -25,14 +26,14 @@ class IntrospectionTokenVerifier:
         import httpx
 
         # Validate URL to prevent SSRF attacks
-        if not self.introspection_endpoint.startswith(('https://', 'http://localhost', 'http://127.0.0.1')):
+        if not self.introspection_endpoint.startswith(("https://", "http://localhost", "http://127.0.0.1")):
             logger.warning(f"Rejecting introspection endpoint with unsafe scheme: {self.introspection_endpoint}")
             return None
 
         # Configure secure HTTP client
         timeout = httpx.Timeout(10.0, connect=5.0)
         limits = httpx.Limits(max_connections=10, max_keepalive_connections=5)
-        
+
         async with httpx.AsyncClient(
             timeout=timeout,
             limits=limits,
