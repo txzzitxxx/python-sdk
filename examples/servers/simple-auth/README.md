@@ -88,11 +88,43 @@ curl http://localhost:9000/.well-known/oauth-authorization-server
 }
 ```
 
+## Legacy MCP Server as Authorization Server (Backwards Compatibility)
+
+For backwards compatibility with older MCP implementations, a legacy server is provided that acts as an Authorization Server (following the old spec where MCP servers could optionally provide OAuth):
+
+### Running the Legacy Server
+
+```bash
+# Start legacy authorization server on port 8002
+python -m mcp_simple_auth.legacy_as_server --port=8002
+```
+
+**Differences from the new architecture:**
+- **MCP server acts as AS:** The MCP server itself provides OAuth endpoints (old spec behavior)
+- **No separate RS:** The server handles both authentication and MCP tools
+- **Local token validation:** Tokens are validated internally without introspection
+- **No RFC 9728 support:** Does not provide `/.well-known/oauth-protected-resource`
+- **Direct OAuth discovery:** OAuth metadata is at the MCP server's URL
+
+### Testing with Legacy Server
+
+```bash
+# Test with client (will automatically fall back to legacy discovery)
+MCP_SERVER_PORT=8002 MCP_TRANSPORT_TYPE=streamable_http python -m mcp_simple_auth_client.main
+```
+
+The client will:
+1. Try RFC 9728 discovery at `/.well-known/oauth-protected-resource` (404 on legacy server)
+2. Fall back to direct OAuth discovery at `/.well-known/oauth-authorization-server` 
+3. Complete authentication with the MCP server acting as its own AS
+
+This ensures existing MCP servers (which could optionally act as Authorization Servers under the old spec) continue to work while the ecosystem transitions to the new architecture where MCP servers are Resource Servers only.
+
 ## Manual Testing
 
 ### Test Discovery
 ```bash
-# Test Resource Server discovery endpoint
+# Test Resource Server discovery endpoint (new architecture)
 curl -v http://localhost:8001/.well-known/oauth-protected-resource
 
 # Test Authorization Server metadata
