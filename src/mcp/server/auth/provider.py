@@ -278,3 +278,19 @@ def construct_redirect_uri(redirect_uri_base: str, **params: str | None) -> str:
 
     redirect_uri = urlunparse(parsed_uri._replace(query=urlencode(query_params)))
     return redirect_uri
+
+
+class ProviderTokenVerifier:
+    """Token verifier that uses an OAuthAuthorizationServerProvider.
+    
+    This is provided for backwards compatibility with existing auth_server_provider
+    configurations. For new implementations using AS/RS separation, consider using 
+    the TokenVerifier protocol with a dedicated implementation like IntrospectionTokenVerifier.
+    """
+
+    def __init__(self, provider: "OAuthAuthorizationServerProvider[AccessToken, RefreshToken, AuthorizationCode]"):
+        self.provider = provider
+
+    async def verify_token(self, token: str) -> AccessToken | None:
+        """Verify token using the provider's load_access_token method."""
+        return await self.provider.load_access_token(token)

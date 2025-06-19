@@ -30,9 +30,9 @@ from mcp.server.auth.middleware.bearer_auth import (
     BearerAuthBackend,
     RequireAuthMiddleware,
 )
-from mcp.server.auth.provider import OAuthAuthorizationServerProvider
+from mcp.server.auth.provider import OAuthAuthorizationServerProvider, ProviderTokenVerifier
 from mcp.server.auth.settings import AuthSettings
-from mcp.server.auth.token_verifier import ProviderTokenVerifier, TokenVerifier
+from mcp.server.auth.token_verifier import TokenVerifier
 from mcp.server.elicitation import ElicitationResult, ElicitSchemaModelT, elicit_with_validation
 from mcp.server.fastmcp.exceptions import ResourceError
 from mcp.server.fastmcp.prompts import Prompt, PromptManager
@@ -65,6 +65,8 @@ from mcp.types import ResourceTemplate as MCPResourceTemplate
 from mcp.types import Tool as MCPTool
 
 logger = get_logger(__name__)
+
+
 
 
 class Settings(BaseSettings, Generic[LifespanResultT]):
@@ -169,7 +171,7 @@ class FastMCP:
         self._auth_server_provider = auth_server_provider
         self._token_verifier = token_verifier
 
-        # Create token verifier from provider if needed
+        # Create token verifier from provider if needed (backwards compatibility)
         if auth_server_provider and not token_verifier:
             self._token_verifier = ProviderTokenVerifier(auth_server_provider)
         self._event_store = event_store

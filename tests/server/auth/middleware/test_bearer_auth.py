@@ -19,8 +19,8 @@ from mcp.server.auth.middleware.bearer_auth import (
 from mcp.server.auth.provider import (
     AccessToken,
     OAuthAuthorizationServerProvider,
+    ProviderTokenVerifier,
 )
-from mcp.server.auth.token_verifier import ProviderTokenVerifier
 
 
 class MockOAuthProvider:

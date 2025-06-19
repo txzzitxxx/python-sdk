@@ -18,7 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings
-from mcp.server.auth.token_verifier import IntrospectionTokenVerifier
+from .token_verifier import IntrospectionTokenVerifier
 from mcp.server.fastmcp.server import FastMCP
 
 logger = logging.getLogger(__name__)
