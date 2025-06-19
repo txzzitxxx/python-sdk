@@ -199,7 +199,7 @@ class TestOAuthClientProvider:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = metadata_response
+            mock_response.content = oauth_metadata.model_dump_json()
             mock_client.get.return_value = mock_response
 
             result = await oauth_provider._discover_oauth_metadata("https://api.example.com/v1/mcp")
@@ -240,7 +240,7 @@ class TestOAuthClientProvider:
             # First call fails (CORS), second succeeds
             mock_response_success = Mock()
             mock_response_success.status_code = 200
-            mock_response_success.json.return_value = metadata_response
+            mock_response_success.content = oauth_metadata.model_dump_json()
 
             mock_client.get.side_effect = [
                 TypeError("CORS error"),  # First call fails
@@ -263,7 +263,7 @@ class TestOAuthClientProvider:
 
             mock_response = Mock()
             mock_response.status_code = 201
-            mock_response.json.return_value = registration_response
+            mock_response.content = oauth_client_info.model_dump_json()
             mock_client.post.return_value = mock_response
 
             result = await oauth_provider._register_oauth_client(
@@ -291,7 +291,7 @@ class TestOAuthClientProvider:
 
             mock_response = Mock()
             mock_response.status_code = 201
-            mock_response.json.return_value = registration_response
+            mock_response.content = oauth_client_info.model_dump_json()
             mock_client.post.return_value = mock_response
 
             # Mock metadata discovery to return None (fallback)
@@ -447,7 +447,6 @@ class TestOAuthClientProvider:
     async def test_exchange_code_for_token_success(self, oauth_provider, oauth_client_info, oauth_token):
         """Test successful code exchange for token."""
         oauth_provider._code_verifier = "test_verifier"
-        token_response = oauth_token.model_dump(by_alias=True, mode="json")
 
         with patch("httpx.AsyncClient") as mock_client_class:
             mock_client = AsyncMock()
@@ -455,7 +454,7 @@ class TestOAuthClientProvider:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = token_response
+            mock_response.content = oauth_token.model_dump_json()
             mock_client.post.return_value = mock_response
 
             with patch.object(oauth_provider, "_validate_token_scopes") as mock_validate:
@@ -502,7 +501,7 @@ class TestOAuthClientProvider:
 
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = token_response
+            mock_response.content = new_token.model_dump_json()
             mock_client.post.return_value = mock_response
 
             with patch.object(oauth_provider, "_validate_token_scopes") as mock_validate:
@@ -925,7 +924,7 @@ class TestProtectedResourceMetadataDiscovery:
             # Mock successful response
             mock_response = Mock()
             mock_response.status_code = 200
-            mock_response.json.return_value = protected_resource_metadata.model_dump(mode="json")
+            mock_response.content = protected_resource_metadata.model_dump_json()
             mock_client.get.return_value = mock_response
 
             result = await oauth_provider._discover_protected_resource_metadata("https://resource.example.com/mcp")
@@ -985,7 +984,7 @@ class TestProtectedResourceMetadataDiscovery:
                     # Second call without header - success
                     mock_response = Mock()
                     mock_response.status_code = 200
-                    mock_response.json.return_value = protected_resource_metadata.model_dump(mode="json")
+                    mock_response.content = protected_resource_metadata.model_dump_json()
                     return mock_response
 
             mock_client.get.side_effect = mock_get_side_effect

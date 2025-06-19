@@ -137,9 +137,9 @@ class OAuthClientProvider(httpx.Auth):
                 if response.status_code == 404:
                     return None
                 response.raise_for_status()
-                metadata_json = response.json()
-                logger.debug(f"Protected resource metadata discovered: {metadata_json}")
-                return ProtectedResourceMetadata.model_validate(metadata_json)
+                metadata = ProtectedResourceMetadata.model_validate_json(response.content)
+                logger.debug(f"Protected resource metadata discovered: {metadata}")
+                return metadata
             except TypeError:
                 # Retry without MCP header for CORS compatibility
                 try:
@@ -147,9 +147,9 @@ class OAuthClientProvider(httpx.Auth):
                     if response.status_code == 404:
                         return None
                     response.raise_for_status()
-                    metadata_json = response.json()
-                    logger.debug(f"Protected resource metadata discovered (no MCP header): {metadata_json}")
-                    return ProtectedResourceMetadata.model_validate(metadata_json)
+                    metadata = ProtectedResourceMetadata.model_validate_json(response.content)
+                    logger.debug(f"Protected resource metadata discovered (no MCP header): {metadata}")
+                    return metadata
                 except Exception:
                     logger.exception("Failed to discover protected resource metadata")
                     return None
@@ -172,9 +172,9 @@ class OAuthClientProvider(httpx.Auth):
                 if response.status_code == 404:
                     return None
                 response.raise_for_status()
-                metadata_json = response.json()
-                logger.debug(f"OAuth metadata discovered: {metadata_json}")
-                return OAuthMetadata.model_validate(metadata_json)
+                metadata = OAuthMetadata.model_validate_json(response.content)
+                logger.debug(f"OAuth metadata discovered: {metadata}")
+                return metadata
             except Exception:
                 # Retry without MCP header for CORS compatibility
                 try:
@@ -182,9 +182,9 @@ class OAuthClientProvider(httpx.Auth):
                     if response.status_code == 404:
                         return None
                     response.raise_for_status()
-                    metadata_json = response.json()
-                    logger.debug(f"OAuth metadata discovered (no MCP header): {metadata_json}")
-                    return OAuthMetadata.model_validate(metadata_json)
+                    metadata = OAuthMetadata.model_validate_json(response.content)
+                    logger.debug(f"OAuth metadata discovered (no MCP header): {metadata}")
+                    return metadata
                 except Exception:
                     logger.exception("Failed to discover OAuth metadata")
                     return None
@@ -230,9 +230,9 @@ class OAuthClientProvider(httpx.Auth):
                         response=response,
                     )
 
-                response_data = response.json()
-                logger.debug(f"Registration successful: {response_data}")
-                return OAuthClientInformationFull.model_validate(response_data)
+                client_info = OAuthClientInformationFull.model_validate_json(response.content)
+                logger.debug(f"Registration successful: {client_info}")
+                return client_info
 
             except httpx.HTTPStatusError:
                 raise
@@ -439,7 +439,7 @@ class OAuthClientProvider(httpx.Auth):
                     raise Exception(f"Token exchange failed: {response.status_code} {response.text}")
 
             # Parse token response
-            token_response = OAuthToken.model_validate(response.json())
+            token_response = OAuthToken.model_validate_json(response.content)
 
             # Validate token scopes
             await self._validate_token_scopes(token_response)
@@ -493,7 +493,7 @@ class OAuthClientProvider(httpx.Auth):
                     return False
 
                 # Parse refreshed tokens
-                token_response = OAuthToken.model_validate(response.json())
+                token_response = OAuthToken.model_validate_json(response.content)
 
                 # Validate token scopes
                 await self._validate_token_scopes(token_response)
