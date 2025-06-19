@@ -81,7 +81,7 @@ class TokenStorage(Protocol):
 
 @dataclass
 class OAuthContext:
-    """Simplified OAuth flow context."""
+    """OAuth flow context."""
 
     server_url: str
     client_metadata: OAuthClientMetadata
@@ -393,7 +393,7 @@ class OAuthClientProvider(httpx.Auth):
             # Perform OAuth flow if not authenticated
             if not self.context.is_token_valid():
                 try:
-                    # Execute OAuth flow inline to properly handle the generator
+                    # Execute OAuth flow inline to handle the generator
                     # Step 1: Discover protected resource metadata (optional)
                     discovery_request = await self._discover_protected_resource()
                     discovery_response = yield discovery_request
@@ -439,7 +439,7 @@ class OAuthClientProvider(httpx.Auth):
                     # Refresh failed, need full re-authentication
                     self._initialized = False
 
-                    # Execute OAuth flow inline to properly handle the generator
+                    # Execute OAuth flow inline to handle the generator
                     # Step 1: Discover protected resource metadata (optional)
                     discovery_request = await self._discover_protected_resource()
                     discovery_response = yield discovery_request
