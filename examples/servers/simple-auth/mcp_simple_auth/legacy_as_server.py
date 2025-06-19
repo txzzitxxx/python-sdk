@@ -358,10 +358,10 @@ def main(port: int, host: str, transport: Literal["sse", "streamable-http"]) -> 
         # No hardcoded credentials - all from environment variables
         server_url = f"http://{host}:{port}"
         settings = ServerSettings(
-            host=host, 
+            host=host,
             port=port,
             server_url=AnyHttpUrl(server_url),
-            github_callback_path=f"{server_url}/github/callback"
+            github_callback_path=f"{server_url}/github/callback",
         )
     except ValueError as e:
         logger.error("Failed to load settings. Make sure environment variables are set:")

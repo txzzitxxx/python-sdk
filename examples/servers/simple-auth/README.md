@@ -25,7 +25,7 @@ export MCP_GITHUB_CLIENT_SECRET="your_client_secret_here"
 
 ```bash
 # Navigate to the simple-auth directory
-cd /Users/inna/code/mcp/python-sdk/examples/servers/simple-auth
+cd examples/servers/simple-auth
 
 # Start Authorization Server on port 9000
 python -m mcp_simple_auth.auth_server --port=9000
@@ -43,7 +43,7 @@ python -m mcp_simple_auth.auth_server --port=9000
 
 ```bash
 # In another terminal, navigate to the simple-auth directory
-cd /Users/inna/code/mcp/python-sdk/examples/servers/simple-auth
+cd examples/servers/simple-auth
 
 # Start Resource Server on port 8001, connected to Authorization Server
 python -m mcp_simple_auth.server --port=8001 --auth-server=http://localhost:9000  --transport=streamable-http
@@ -53,9 +53,7 @@ python -m mcp_simple_auth.server --port=8001 --auth-server=http://localhost:9000
 ### Step 3: Test with Client
 
 ```bash
-# Start Resource Server with streamable HTTP
-python -m mcp_simple_auth.server --port=8001 --auth-server=http://localhost:9000 --transport=streamable-http
-
+cd examples/clients/simple-auth-client
 # Start client with streamable HTTP  
 MCP_SERVER_PORT=8001 MCP_TRANSPORT_TYPE=streamable_http python -m mcp_simple_auth_client.main
 ```
