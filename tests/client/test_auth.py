@@ -1,14 +1,14 @@
 """
-Tests for OAuth client authentication implementation.
+Tests for refactored OAuth client authentication implementation.
 """
 
 import time
-from unittest.mock import AsyncMock, Mock
 
+import httpx
 import pytest
 from pydantic import AnyHttpUrl, AnyUrl
 
-from mcp.client.auth import OAuthClientProvider, OAuthStateType, PKCEParameters
+from mcp.client.auth import OAuthClientProvider, PKCEParameters
 from mcp.shared.auth import (
     OAuthClientInformationFull,
     OAuthClientMetadata,
@@ -48,57 +48,68 @@ def client_metadata():
         client_uri=AnyHttpUrl("https://example.com"),
         redirect_uris=[AnyUrl("http://localhost:3030/callback")],
         scope="read write",
-        token_endpoint_auth_method="client_secret_post",
     )
 
 
 @pytest.fixture
 def valid_tokens():
     return OAuthToken(
-        access_token="valid_access_token",
+        access_token="test_access_token",
         token_type="Bearer",
         expires_in=3600,
-        refresh_token="valid_refresh_token",
+        refresh_token="test_refresh_token",
         scope="read write",
     )
 
 
 @pytest.fixture
 def oauth_provider(client_metadata, mock_storage):
+    async def redirect_handler(url: str) -> None:
+        """Mock redirect handler."""
+        pass
+
+    async def callback_handler() -> tuple[str, str | None]:
+        """Mock callback handler."""
+        return "test_auth_code", "test_state"
+
     return OAuthClientProvider(
         server_url="https://api.example.com/v1/mcp",
         client_metadata=client_metadata,
         storage=mock_storage,
-        redirect_handler=AsyncMock(),
-        callback_handler=AsyncMock(return_value=("auth_code", None)),
+        redirect_handler=redirect_handler,
+        callback_handler=callback_handler,
     )
 
 
-class TestOAuthClientAuth:
-    """Test OAuth client authentication."""
+class TestPKCEParameters:
+    """Test PKCE parameter generation."""
 
-    def test_pkce_parameters_generation(self):
-        """Test PKCEParameters.generate() creates valid PKCE params."""
+    def test_pkce_generation(self):
+        """Test PKCE parameter generation creates valid values."""
         pkce = PKCEParameters.generate()
 
-        # Check code verifier format
+        # Verify lengths
         assert len(pkce.code_verifier) == 128
+        assert 43 <= len(pkce.code_challenge) <= 128
+
+        # Verify characters used in verifier
         allowed_chars = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
-        assert set(pkce.code_verifier) <= allowed_chars
+        assert all(c in allowed_chars for c in pkce.code_verifier)
 
-        # Check code challenge format
-        assert len(pkce.code_challenge) >= 43
-        assert "=" not in pkce.code_challenge  # Base64url without padding
-        assert "+" not in pkce.code_challenge
-        assert "/" not in pkce.code_challenge
+        # Verify base64url encoding in challenge (no padding)
+        assert "=" not in pkce.code_challenge
 
-        # Check method
-        assert pkce.code_challenge_method == "S256"
-
-        # Test uniqueness
+    def test_pkce_uniqueness(self):
+        """Test PKCE generates unique values each time."""
+        pkce1 = PKCEParameters.generate()
         pkce2 = PKCEParameters.generate()
-        assert pkce.code_verifier != pkce2.code_verifier
-        assert pkce.code_challenge != pkce2.code_challenge
+
+        assert pkce1.code_verifier != pkce2.code_verifier
+        assert pkce1.code_challenge != pkce2.code_challenge
+
+
+class TestOAuthContext:
+    """Test OAuth context functionality."""
 
     @pytest.mark.anyio
     async def test_oauth_provider_initialization(self, oauth_provider, client_metadata, mock_storage):
@@ -108,52 +119,6 @@ class TestOAuthClientAuth:
         assert oauth_provider.context.storage == mock_storage
         assert oauth_provider.context.timeout == 300.0
         assert oauth_provider.context is not None
-        assert oauth_provider.state_machine is not None
-
-    @pytest.mark.anyio
-    async def test_state_machine_starts_correctly(self, oauth_provider):
-        """Test state machine begins in DISCOVERING_PROTECTED_RESOURCE."""
-        assert oauth_provider.state_machine.current_state_type == OAuthStateType.DISCOVERING_PROTECTED_RESOURCE
-
-    @pytest.mark.anyio
-    async def test_auth_flow_with_valid_tokens(self, oauth_provider, mock_storage, valid_tokens):
-        """Test flow skips to AUTHENTICATED when tokens are valid."""
-        # Set up valid tokens in storage
-        await mock_storage.set_tokens(valid_tokens)
-
-        # Set token expiry time in the future
-        oauth_provider.context.token_expiry_time = time.time() + 1800  # 30 minutes from now
-
-        # Initialize should detect valid tokens and transition to AUTHENTICATED
-        await oauth_provider.initialize()
-
-        assert oauth_provider.state_machine.current_state_type == OAuthStateType.AUTHENTICATED
-
-    @pytest.mark.anyio
-    async def test_auth_flow_legacy_server_fallback(self, oauth_provider):
-        """Test 404 on protected resource discovery transitions to OAuth metadata discovery."""
-        # Get the discovering protected resource state
-        state = oauth_provider.state_machine.current_state
-
-        # Mock a 404 response
-        mock_request = Mock()
-        mock_response = Mock()
-        mock_response.status_code = 404
-
-        # Handle the 404 response
-        next_state = await state.handle_response(mock_request, mock_response)
-
-        # Should transition to discovering OAuth metadata (legacy server behavior)
-        assert next_state == OAuthStateType.DISCOVERING_OAUTH_METADATA
-
-    @pytest.mark.anyio
-    async def test_invalid_state_transitions_raise_error(self, oauth_provider):
-        """Test state machine prevents invalid transitions."""
-        from mcp.client.auth import OAuthStateTransitionError
-
-        # Try to transition to an invalid state
-        with pytest.raises(OAuthStateTransitionError):
-            await oauth_provider.state_machine.transition_to(OAuthStateType.EXCHANGING_TOKEN)
 
     def test_context_url_parsing(self, oauth_provider):
         """Test get_authorization_base_url() extracts base URLs correctly."""
@@ -198,16 +163,153 @@ class TestOAuthClientAuth:
         assert context.is_token_valid()
         assert context.can_refresh_token()  # Has refresh token and client info
 
-        # Expired tokens
+        # Expire the token
         context.token_expiry_time = time.time() - 100  # Expired 100 seconds ago
-
-        # Should be invalid but can refresh
         assert not context.is_token_valid()
-        assert context.can_refresh_token()
+        assert context.can_refresh_token()  # Can still refresh
 
-        # No refresh token
+        # Remove refresh token
         context.current_tokens.refresh_token = None
-
-        # Should be invalid and cannot refresh
-        assert not context.is_token_valid()
         assert not context.can_refresh_token()
+
+        # Remove client info
+        context.current_tokens.refresh_token = "test_refresh_token"
+        context.client_info = None
+        assert not context.can_refresh_token()
+
+    def test_clear_tokens(self, oauth_provider, valid_tokens):
+        """Test clear_tokens() removes token data."""
+        context = oauth_provider.context
+        context.current_tokens = valid_tokens
+        context.token_expiry_time = time.time() + 1800
+
+        # Clear tokens
+        context.clear_tokens()
+
+        # Verify cleared
+        assert context.current_tokens is None
+        assert context.token_expiry_time is None
+
+
+class TestOAuthFlow:
+    """Test OAuth flow methods."""
+
+    @pytest.mark.anyio
+    async def test_discover_protected_resource_request(self, oauth_provider):
+        """Test protected resource discovery request building."""
+        request = await oauth_provider._discover_protected_resource()
+
+        assert request.method == "GET"
+        assert str(request.url) == "https://api.example.com/.well-known/oauth-protected-resource"
+        assert "mcp-protocol-version" in request.headers
+
+    @pytest.mark.anyio
+    async def test_discover_oauth_metadata_request(self, oauth_provider):
+        """Test OAuth metadata discovery request building."""
+        request = await oauth_provider._discover_oauth_metadata()
+
+        assert request.method == "GET"
+        assert str(request.url) == "https://api.example.com/.well-known/oauth-authorization-server"
+        assert "mcp-protocol-version" in request.headers
+
+    @pytest.mark.anyio
+    async def test_register_client_request(self, oauth_provider):
+        """Test client registration request building."""
+        request = await oauth_provider._register_client()
+
+        assert request is not None
+        assert request.method == "POST"
+        assert str(request.url) == "https://api.example.com/register"
+        assert request.headers["Content-Type"] == "application/json"
+
+    @pytest.mark.anyio
+    async def test_register_client_skip_if_registered(self, oauth_provider, mock_storage):
+        """Test client registration is skipped if already registered."""
+        # Set existing client info
+        client_info = OAuthClientInformationFull(
+            client_id="existing_client",
+            redirect_uris=[AnyUrl("http://localhost:3030/callback")],
+        )
+        oauth_provider.context.client_info = client_info
+
+        # Should return None (skip registration)
+        request = await oauth_provider._register_client()
+        assert request is None
+
+    @pytest.mark.anyio
+    async def test_token_exchange_request(self, oauth_provider):
+        """Test token exchange request building."""
+        # Set up required context
+        oauth_provider.context.client_info = OAuthClientInformationFull(
+            client_id="test_client",
+            client_secret="test_secret",
+            redirect_uris=[AnyUrl("http://localhost:3030/callback")],
+        )
+
+        request = await oauth_provider._exchange_token("test_auth_code", "test_verifier")
+
+        assert request.method == "POST"
+        assert str(request.url) == "https://api.example.com/token"
+        assert request.headers["Content-Type"] == "application/x-www-form-urlencoded"
+
+        # Check form data
+        content = request.content.decode()
+        assert "grant_type=authorization_code" in content
+        assert "code=test_auth_code" in content
+        assert "code_verifier=test_verifier" in content
+        assert "client_id=test_client" in content
+        assert "client_secret=test_secret" in content
+
+    @pytest.mark.anyio
+    async def test_refresh_token_request(self, oauth_provider, valid_tokens):
+        """Test refresh token request building."""
+        # Set up required context
+        oauth_provider.context.current_tokens = valid_tokens
+        oauth_provider.context.client_info = OAuthClientInformationFull(
+            client_id="test_client",
+            client_secret="test_secret",
+            redirect_uris=[AnyUrl("http://localhost:3030/callback")],
+        )
+
+        request = await oauth_provider._refresh_token()
+
+        assert request.method == "POST"
+        assert str(request.url) == "https://api.example.com/token"
+        assert request.headers["Content-Type"] == "application/x-www-form-urlencoded"
+
+        # Check form data
+        content = request.content.decode()
+        assert "grant_type=refresh_token" in content
+        assert "refresh_token=test_refresh_token" in content
+        assert "client_id=test_client" in content
+        assert "client_secret=test_secret" in content
+
+
+class TestAuthFlow:
+    """Test the auth flow in httpx."""
+
+    @pytest.mark.anyio
+    async def test_auth_flow_with_valid_tokens(self, oauth_provider, mock_storage, valid_tokens):
+        """Test auth flow when tokens are already valid."""
+        # Pre-store valid tokens
+        await mock_storage.set_tokens(valid_tokens)
+        oauth_provider.context.current_tokens = valid_tokens
+        oauth_provider.context.token_expiry_time = time.time() + 1800
+        oauth_provider._initialized = True
+
+        # Create a test request
+        test_request = httpx.Request("GET", "https://api.example.com/test")
+
+        # Mock the auth flow
+        auth_flow = oauth_provider.async_auth_flow(test_request)
+
+        # Should get the request with auth header added
+        request = await auth_flow.__anext__()
+        assert request.headers["Authorization"] == "Bearer test_access_token"
+
+        # Send a successful response
+        response = httpx.Response(200)
+        try:
+            await auth_flow.asend(response)
+        except StopAsyncIteration:
+            pass  # Expected
