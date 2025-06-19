@@ -137,7 +137,7 @@ class OAuthContext:
 
 class OAuthClientProvider(httpx.Auth):
     """
-    Simplified OAuth2 authentication for httpx.
+    OAuth2 authentication for httpx.
     Handles OAuth flow with automatic client registration and token storage.
     """
 
