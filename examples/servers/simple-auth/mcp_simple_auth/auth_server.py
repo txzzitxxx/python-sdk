@@ -196,8 +196,7 @@ async def run_server(server_settings: AuthServerSettings, github_settings: GitHu
 
 @click.command()
 @click.option("--port", default=9000, help="Port to listen on")
-@click.option("--host", default="localhost", help="Host to bind to")
-def main(port: int, host: str) -> int:
+def main(port: int) -> int:
     """
     Run the MCP Authorization Server.
 
@@ -217,6 +216,7 @@ def main(port: int, host: str) -> int:
         raise ValueError("GitHub credentials not provided")
 
     # Create server settings
+    host = "localhost"
     server_url = f"http://{host}:{port}"
     server_settings = AuthServerSettings(
         host=host,

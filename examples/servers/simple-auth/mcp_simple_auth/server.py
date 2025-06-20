@@ -137,7 +137,6 @@ def create_resource_server(settings: ResourceServerSettings) -> FastMCP:
 
 @click.command()
 @click.option("--port", default=8001, help="Port to listen on")
-@click.option("--host", default="localhost", help="Host to bind to")
 @click.option("--auth-server", default="http://localhost:9000", help="Authorization Server URL")
 @click.option(
     "--transport",
@@ -145,7 +144,7 @@ def create_resource_server(settings: ResourceServerSettings) -> FastMCP:
     type=click.Choice(["sse", "streamable-http"]),
     help="Transport protocol to use ('sse' or 'streamable-http')",
 )
-def main(port: int, host: str, auth_server: str, transport: Literal["sse", "streamable-http"]) -> int:
+def main(port: int, auth_server: str, transport: Literal["sse", "streamable-http"]) -> int:
     """
     Run the MCP Resource Server.
 
@@ -163,6 +162,7 @@ def main(port: int, host: str, auth_server: str, transport: Literal["sse", "stre
         auth_server_url = AnyHttpUrl(auth_server)
 
         # Create settings
+        host = "localhost"
         server_url = f"http://{host}:{port}"
         settings = ResourceServerSettings(
             host=host,

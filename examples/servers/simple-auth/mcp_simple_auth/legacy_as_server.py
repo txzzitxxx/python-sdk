@@ -116,14 +116,13 @@ def create_simple_mcp_server(server_settings: ServerSettings, github_settings: G
 
 @click.command()
 @click.option("--port", default=8000, help="Port to listen on")
-@click.option("--host", default="localhost", help="Host to bind to")
 @click.option(
     "--transport",
     default="streamable-http",
     type=click.Choice(["sse", "streamable-http"]),
     help="Transport protocol to use ('sse' or 'streamable-http')",
 )
-def main(port: int, host: str, transport: Literal["sse", "streamable-http"]) -> int:
+def main(port: int, transport: Literal["sse", "streamable-http"]) -> int:
     """Run the simple GitHub MCP server."""
     logging.basicConfig(level=logging.INFO)
 
@@ -134,6 +133,7 @@ def main(port: int, host: str, transport: Literal["sse", "streamable-http"]) -> 
     if not github_settings.github_client_id or not github_settings.github_client_secret:
         raise ValueError("GitHub credentials not provided")
     # Create server settings
+    host = "localhost"
     server_url = f"http://{host}:{port}"
     server_settings = ServerSettings(
         host=host,
