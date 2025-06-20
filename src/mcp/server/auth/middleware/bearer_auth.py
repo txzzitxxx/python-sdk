@@ -106,22 +106,24 @@ class RequireAuthMiddleware:
         www_authenticate = f"Bearer {', '.join(www_auth_parts)}"
 
         # Send response
+        body = {"error": error, "error_description": description}
+        body_bytes = json.dumps(body).encode()
+
         await send(
             {
                 "type": "http.response.start",
                 "status": status_code,
                 "headers": [
                     (b"content-type", b"application/json"),
+                    (b"content-length", str(len(body_bytes)).encode()),
                     (b"www-authenticate", www_authenticate.encode()),
                 ],
             }
         )
 
-        # Send body
-        body = {"error": error, "error_description": description}
         await send(
             {
                 "type": "http.response.body",
-                "body": json.dumps(body).encode(),
+                "body": body_bytes,
             }
         )

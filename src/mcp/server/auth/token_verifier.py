@@ -11,4 +11,3 @@ class TokenVerifier(Protocol):
 
     async def verify_token(self, token: str) -> AccessToken | None:
         """Verify a bearer token and return access info if valid."""
-        ...

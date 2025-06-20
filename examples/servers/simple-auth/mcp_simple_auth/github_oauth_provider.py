@@ -3,6 +3,10 @@ Shared GitHub OAuth provider for MCP servers.
 
 This module contains the common GitHub OAuth functionality used by both
 the standalone authorization server and the legacy combined server.
+
+NOTE: this is a simplified example for demonstration purposes.
+This is not a production-ready implementation.
+
 """
 
 import logging
@@ -11,7 +15,7 @@ import time
 from typing import Any
 
 from pydantic import AnyHttpUrl
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from starlette.exceptions import HTTPException
 
 from mcp.server.auth.provider import (
@@ -31,9 +35,11 @@ logger = logging.getLogger(__name__)
 class GitHubOAuthSettings(BaseSettings):
     """Common GitHub OAuth settings."""
 
+    model_config = SettingsConfigDict(env_prefix="MCP_")
+
     # GitHub OAuth settings - MUST be provided via environment variables
-    github_client_id: str  # MCP_GITHUB_CLIENT_ID env var
-    github_client_secret: str  # MCP_GITHUB_CLIENT_SECRET env var
+    github_client_id: str | None = None
+    github_client_secret: str | None = None
 
     # GitHub OAuth URLs
     github_auth_url: str = "https://github.com/login/oauth/authorize"

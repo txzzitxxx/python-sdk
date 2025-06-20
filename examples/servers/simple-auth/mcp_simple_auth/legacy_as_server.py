@@ -4,6 +4,10 @@ Legacy Combined Authorization Server + Resource Server for MCP.
 This server implements the old spec where MCP servers could act as both AS and RS.
 Used for backwards compatibility testing with the new split AS/RS architecture.
 
+NOTE: this is a simplified example for demonstration purposes.
+This is not a production-ready implementation.
+
+
 Usage:
     python -m mcp_simple_auth.legacy_as_server --port=8002
 """
@@ -12,11 +16,10 @@ import logging
 from typing import Any, Literal
 
 import click
-from pydantic import AnyHttpUrl
-from pydantic_settings import SettingsConfigDict
+from pydantic import AnyHttpUrl, BaseModel
 from starlette.exceptions import HTTPException
 from starlette.requests import Request
-from starlette.responses import JSONResponse, RedirectResponse, Response
+from starlette.responses import RedirectResponse, Response
 
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.auth.settings import AuthSettings, ClientRegistrationOptions
@@ -27,10 +30,8 @@ from .github_oauth_provider import GitHubOAuthProvider, GitHubOAuthSettings
 logger = logging.getLogger(__name__)
 
 
-class ServerSettings(GitHubOAuthSettings):
+class ServerSettings(BaseModel):
     """Settings for the simple GitHub MCP server."""
-
-    model_config = SettingsConfigDict(env_prefix="MCP_")
 
     # Server settings
     host: str = "localhost"
@@ -38,35 +39,26 @@ class ServerSettings(GitHubOAuthSettings):
     server_url: AnyHttpUrl = AnyHttpUrl("http://localhost:8000")
     github_callback_path: str = "http://localhost:8000/github/callback"
 
-    def __init__(self, **data):
-        """Initialize settings with values from environment variables.
-
-        Note: github_client_id and github_client_secret are required but can be
-        loaded automatically from environment variables (MCP_GITHUB_CLIENT_ID
-        and MCP_GITHUB_CLIENT_SECRET) and don't need to be passed explicitly.
-        """
-        super().__init__(**data)
-
 
 class SimpleGitHubOAuthProvider(GitHubOAuthProvider):
     """GitHub OAuth provider for legacy MCP server."""
 
-    def __init__(self, settings: ServerSettings):
-        super().__init__(settings, settings.github_callback_path)
+    def __init__(self, github_settings: GitHubOAuthSettings, github_callback_path: str):
+        super().__init__(github_settings, github_callback_path)
 
 
-def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
+def create_simple_mcp_server(server_settings: ServerSettings, github_settings: GitHubOAuthSettings) -> FastMCP:
     """Create a simple FastMCP server with GitHub OAuth."""
-    oauth_provider = SimpleGitHubOAuthProvider(settings)
+    oauth_provider = SimpleGitHubOAuthProvider(github_settings, server_settings.github_callback_path)
 
     auth_settings = AuthSettings(
-        issuer_url=settings.server_url,
+        issuer_url=server_settings.server_url,
         client_registration_options=ClientRegistrationOptions(
             enabled=True,
-            valid_scopes=[settings.mcp_scope],
-            default_scopes=[settings.mcp_scope],
+            valid_scopes=[github_settings.mcp_scope],
+            default_scopes=[github_settings.mcp_scope],
         ),
-        required_scopes=[settings.mcp_scope],
+        required_scopes=[github_settings.mcp_scope],
         # No authorization_servers parameter in legacy mode
         authorization_servers=None,
     )
@@ -75,8 +67,8 @@ def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
         name="Simple GitHub MCP Server",
         instructions="A simple MCP server with GitHub OAuth authentication",
         auth_server_provider=oauth_provider,
-        host=settings.host,
-        port=settings.port,
+        host=server_settings.host,
+        port=server_settings.port,
         debug=True,
         auth=auth_settings,
     )
@@ -90,20 +82,8 @@ def create_simple_mcp_server(settings: ServerSettings) -> FastMCP:
         if not code or not state:
             raise HTTPException(400, "Missing code or state parameter")
 
-        try:
-            redirect_uri = await oauth_provider.handle_github_callback(code, state)
-            return RedirectResponse(status_code=302, url=redirect_uri)
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error("Unexpected error", exc_info=e)
-            return JSONResponse(
-                status_code=500,
-                content={
-                    "error": "server_error",
-                    "error_description": "Unexpected error",
-                },
-            )
+        redirect_uri = await oauth_provider.handle_github_callback(code, state)
+        return RedirectResponse(status_code=302, url=redirect_uri)
 
     def get_github_token() -> str:
         """Get the GitHub token for the authenticated user."""
@@ -147,23 +127,22 @@ def main(port: int, host: str, transport: Literal["sse", "streamable-http"]) -> 
     """Run the simple GitHub MCP server."""
     logging.basicConfig(level=logging.INFO)
 
-    try:
-        # No hardcoded credentials - all from environment variables
-        server_url = f"http://{host}:{port}"
-        settings = ServerSettings(
-            host=host,
-            port=port,
-            server_url=AnyHttpUrl(server_url),
-            github_callback_path=f"{server_url}/github/callback",
-        )
-    except ValueError as e:
-        logger.error("Failed to load settings. Make sure environment variables are set:")
-        logger.error("  MCP_GITHUB_CLIENT_ID=<your-client-id>")
-        logger.error("  MCP_GITHUB_CLIENT_SECRET=<your-client-secret>")
-        logger.error(f"Error: {e}")
-        return 1
+    # Load GitHub settings from environment variables
+    github_settings = GitHubOAuthSettings()
 
-    mcp_server = create_simple_mcp_server(settings)
+    # Validate required fields
+    if not github_settings.github_client_id or not github_settings.github_client_secret:
+        raise ValueError("GitHub credentials not provided")
+    # Create server settings
+    server_url = f"http://{host}:{port}"
+    server_settings = ServerSettings(
+        host=host,
+        port=port,
+        server_url=AnyHttpUrl(server_url),
+        github_callback_path=f"{server_url}/github/callback",
+    )
+
+    mcp_server = create_simple_mcp_server(server_settings, github_settings)
     logger.info(f"Starting server with {transport} transport")
     mcp_server.run(transport=transport)
     return 0
