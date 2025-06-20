@@ -393,8 +393,8 @@ class OAuthClientProvider(httpx.Auth):
             # Perform OAuth flow if not authenticated
             if not self.context.is_token_valid():
                 try:
-                    # Execute OAuth flow inline to handle the generator
-                    # Step 1: Discover protected resource metadata (optional)
+                    # OAuth flow must be inline due to generator constraints
+                    # Step 1: Discover protected resource metadata (spec revision 2025-06-18)
                     discovery_request = await self._discover_protected_resource()
                     discovery_response = yield discovery_request
                     await self._handle_protected_resource_response(discovery_response)
@@ -439,8 +439,8 @@ class OAuthClientProvider(httpx.Auth):
                     # Refresh failed, need full re-authentication
                     self._initialized = False
 
-                    # Execute OAuth flow inline to handle the generator
-                    # Step 1: Discover protected resource metadata (optional)
+                    # OAuth flow must be inline due to generator constraints
+                    # Step 1: Discover protected resource metadata (spec revision 2025-06-18)
                     discovery_request = await self._discover_protected_resource()
                     discovery_response = yield discovery_request
                     await self._handle_protected_resource_response(discovery_response)
