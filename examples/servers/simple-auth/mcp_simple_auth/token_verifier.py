@@ -2,8 +2,7 @@
 
 import logging
 
-from mcp.server.auth.provider import AccessToken
-from mcp.server.auth.token_verifier import TokenVerifier
+from mcp.server.auth.provider import AccessToken, TokenVerifier
 
 logger = logging.getLogger(__name__)
 
