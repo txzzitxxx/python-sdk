@@ -288,7 +288,7 @@ class ProviderTokenVerifier:
     the TokenVerifier protocol with a dedicated implementation like IntrospectionTokenVerifier.
     """
 
-    def __init__(self, provider: "OAuthAuthorizationServerProvider[AccessToken, RefreshToken, AuthorizationCode]"):
+    def __init__(self, provider: "OAuthAuthorizationServerProvider[AuthorizationCode, RefreshToken, AccessToken]"):
         self.provider = provider
 
     async def verify_token(self, token: str) -> AccessToken | None:
