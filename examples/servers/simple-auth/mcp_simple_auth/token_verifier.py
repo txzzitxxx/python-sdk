@@ -3,11 +3,12 @@
 import logging
 
 from mcp.server.auth.provider import AccessToken
+from mcp.server.auth.token_verifier import TokenVerifier
 
 logger = logging.getLogger(__name__)
 
 
-class IntrospectionTokenVerifier:
+class IntrospectionTokenVerifier(TokenVerifier):
     """Example token verifier that uses OAuth 2.0 Token Introspection (RFC 7662).
 
     This is a simple example implementation for demonstration purposes.
