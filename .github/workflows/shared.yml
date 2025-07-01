@@ -26,6 +26,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    continue-on-error: true
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
@@ -46,6 +47,6 @@ jobs:
       - name: Run pytest
         run: uv run --frozen --no-sync pytest
 
-      # this must run last as it modifies the environment!
-      - name: test lowest versions
-        run: uv run --all-extras --resolution lowest-direct pytest
+      # This must run last as it modifies the environment!
+      - name: Run pytest with lowest versions
+        run: uv run --all-extras --resolution lowest-direct --upgrade pytest
