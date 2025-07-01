@@ -3,14 +3,15 @@ import pytest
 from pydantic import AnyUrl
 
 from mcp.server.fastmcp import FastMCP
-from mcp.shared.memory import (
-    create_connected_server_and_client_session as create_session,
-)
+from mcp.shared.memory import create_connected_server_and_client_session as create_session
 
 _sleep_time_seconds = 0.01
 _resource_name = "slow://slow_resource"
 
 
+@pytest.mark.filterwarnings(
+    "ignore:coroutine 'test_messages_are_executed_concurrently.<locals>.slow_resource' was never awaited:RuntimeWarning"
+)
 @pytest.mark.anyio
 async def test_messages_are_executed_concurrently():
     server = FastMCP("test")
@@ -46,15 +47,3 @@ async def test_messages_are_executed_concurrently():
                 active_calls -= 1
         print(f"Max concurrent calls: {max_concurrent_calls}")
         assert max_concurrent_calls > 1, "No concurrent calls were executed"
-
-
-def main():
-    anyio.run(test_messages_are_executed_concurrently)
-
-
-if __name__ == "__main__":
-    import logging
-
-    logging.basicConfig(level=logging.DEBUG)
-
-    main()
