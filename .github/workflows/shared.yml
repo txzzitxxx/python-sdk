@@ -45,4 +45,7 @@ jobs:
 
       - name: Run pytest
         run: uv run --frozen --no-sync pytest
-    continue-on-error: true
+
+      # this must run last as it modifies the environment!
+      - name: test lowest versions
+        run: uv run --all-extras --resolution lowest-direct pytest
