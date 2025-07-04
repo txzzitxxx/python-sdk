@@ -49,4 +49,8 @@ jobs:
 
       # This must run last as it modifies the environment!
       - name: Run pytest with lowest versions
-        run: uv run --all-extras --resolution lowest-direct --upgrade pytest
+        run: |
+          uv sync --all-extras --upgrade
+          uv run --no-sync pytest
+        env:
+          UV_RESOLUTION: lowest-direct
