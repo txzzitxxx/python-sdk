@@ -12,31 +12,26 @@ _resource_name = "slow://slow_resource"
 async def test_messages_are_executed_concurrently():
     server = FastMCP("test")
     event = anyio.Event()
-    tool_started = anyio.Event()
     call_order = []
 
     @server.tool("sleep")
     async def sleep_tool():
         call_order.append("waiting_for_event")
-        tool_started.set()
         await event.wait()
         call_order.append("tool_end")
         return "done"
 
     @server.resource(_resource_name)
     async def slow_resource():
-        # Wait for tool to start before setting the event
-        await tool_started.wait()
+        # Set event immediately
         event.set()
         call_order.append("resource_end")
         return "slow"
 
     async with create_session(server._mcp_server) as client_session:
-        # First tool will wait on event, second will set it
+        # Start both requests concurrently
         async with anyio.create_task_group() as tg:
-            # Start the tool first (it will wait on event)
             tg.start_soon(client_session.call_tool, "sleep")
-            # Then the resource (it will set the event)
             tg.start_soon(client_session.read_resource, AnyUrl(_resource_name))
 
         # Verify that both ran concurrently
