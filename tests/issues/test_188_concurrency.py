@@ -1,3 +1,5 @@
+import sys
+
 import anyio
 import pytest
 from pydantic import AnyUrl
@@ -5,7 +7,8 @@ from pydantic import AnyUrl
 from mcp.server.fastmcp import FastMCP
 from mcp.shared.memory import create_connected_server_and_client_session as create_session
 
-_sleep_time_seconds = 0.01
+# Use longer sleep time on Windows to ensure tasks overlap
+_sleep_time_seconds = 0.1 if sys.platform == "win32" else 0.01
 _resource_name = "slow://slow_resource"
 
 
