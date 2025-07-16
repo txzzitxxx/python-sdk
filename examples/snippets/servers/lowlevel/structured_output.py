@@ -1,3 +1,9 @@
+# /// script
+# requires-python = ">=3.11"
+# dependencies = [
+#     "mcp",
+# ]
+# ///
 """
 Run from the repository root:
     uv run examples/snippets/servers/lowlevel/structured_output.py
