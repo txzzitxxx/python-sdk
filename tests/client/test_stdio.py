@@ -118,7 +118,7 @@ async def test_stdio_client_universal_cleanup():
         """
         import time
         import sys
-        
+
         # Simulate a long-running process
         for i in range(100):
             time.sleep(0.1)
@@ -532,7 +532,7 @@ async def test_stdio_client_graceful_stdin_exit():
     script_content = textwrap.dedent(
         """
         import sys
-        
+
         # Read from stdin until it's closed
         try:
             while True:
@@ -541,7 +541,7 @@ async def test_stdio_client_graceful_stdin_exit():
                     break
         except:
             pass
-        
+
         # Exit gracefully
         sys.exit(0)
         """
@@ -590,16 +590,16 @@ async def test_stdio_client_stdin_close_ignored():
         import signal
         import sys
         import time
-        
+
         # Set up SIGTERM handler to exit cleanly
         def sigterm_handler(signum, frame):
             sys.exit(0)
-        
+
         signal.signal(signal.SIGTERM, sigterm_handler)
-        
+
         # Close stdin immediately to simulate ignoring it
         sys.stdin.close()
-        
+
         # Keep running until SIGTERM
         while True:
             time.sleep(0.1)
