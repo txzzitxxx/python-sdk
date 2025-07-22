@@ -1,7 +1,7 @@
 import logging
 import os
 import sys
-from contextlib import AsyncExitStack, asynccontextmanager
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Literal, TextIO
 
@@ -192,6 +192,8 @@ async def stdio_client(server: StdioServerParameters, errlog: TextIO = sys.stder
             except ProcessLookupError:
                 # Process already exited, which is fine
                 pass
+            await read_stream_writer.aclose()
+            await write_stream_reader.aclose()
 
 
 def _get_executable_command(command: str) -> str:
