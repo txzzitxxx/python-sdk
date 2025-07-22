@@ -252,12 +252,7 @@ class BaseSession(
             self._progress_callbacks[request_id] = progress_callback
 
         try:
-            jsonrpc_request = JSONRPCRequest(
-                jsonrpc="2.0",
-                id=request_id,
-                **request_data,
-            )
-
+            jsonrpc_request = JSONRPCRequest(jsonrpc="2.0", id=request_id, **request_data)
             await self._write_stream.send(SessionMessage(message=JSONRPCMessage(jsonrpc_request), metadata=metadata))
 
             # request read timeout takes precedence over session read timeout
@@ -329,10 +324,7 @@ class BaseSession(
             await self._write_stream.send(session_message)
 
     async def _receive_loop(self) -> None:
-        async with (
-            self._read_stream,
-            self._write_stream,
-        ):
+        async with self._read_stream, self._write_stream:
             try:
                 async for message in self._read_stream:
                     if isinstance(message, Exception):
@@ -418,10 +410,10 @@ class BaseSession(
                 # Without this handler, the exception would propagate up and
                 # crash the server's task group.
                 logging.debug("Read stream closed by client")
-            except Exception as e:
+            except Exception:
                 # Other exceptions are not expected and should be logged. We purposefully
                 # catch all exceptions here to avoid crashing the server.
-                logging.exception(f"Unhandled exception in receive loop: {e}")
+                logging.exception("Unhandled exception in receive loop")
             finally:
                 # after the read stream is closed, we need to send errors
                 # to any pending requests

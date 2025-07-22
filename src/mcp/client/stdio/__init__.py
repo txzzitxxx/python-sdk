@@ -1,14 +1,13 @@
 import logging
 import os
 import sys
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
 from typing import Literal, TextIO
 
 import anyio
 import anyio.lowlevel
 from anyio.abc import Process
-from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 from anyio.streams.text import TextReceiveStream
 from pydantic import BaseModel, Field
 
@@ -107,33 +106,19 @@ async def stdio_client(server: StdioServerParameters, errlog: TextIO = sys.stder
     Client transport for stdio: this will connect to a server by spawning a
     process and communicating with it over stdin/stdout.
     """
-    read_stream: MemoryObjectReceiveStream[SessionMessage | Exception]
-    read_stream_writer: MemoryObjectSendStream[SessionMessage | Exception]
+    read_stream_writer, read_stream = anyio.create_memory_object_stream[SessionMessage | Exception](0)
+    write_stream, write_stream_reader = anyio.create_memory_object_stream[SessionMessage](0)
 
-    write_stream: MemoryObjectSendStream[SessionMessage]
-    write_stream_reader: MemoryObjectReceiveStream[SessionMessage]
+    command = _get_executable_command(server.command)
 
-    read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
-    write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
-
-    try:
-        command = _get_executable_command(server.command)
-
-        # Open process with stderr piped for capture
-        process = await _create_platform_compatible_process(
-            command=command,
-            args=server.args,
-            env=({**get_default_environment(), **server.env} if server.env is not None else get_default_environment()),
-            errlog=errlog,
-            cwd=server.cwd,
-        )
-    except OSError:
-        # Clean up streams if process creation fails
-        await read_stream.aclose()
-        await write_stream.aclose()
-        await read_stream_writer.aclose()
-        await write_stream_reader.aclose()
-        raise
+    # Open process with stderr piped for capture
+    process = await _create_platform_compatible_process(
+        command=command,
+        args=server.args,
+        env=({**get_default_environment(), **server.env} if server.env is not None else get_default_environment()),
+        errlog=errlog,
+        cwd=server.cwd,
+    )
 
     async def stdout_reader():
         assert process.stdout, "Opened process is missing stdout"
@@ -177,14 +162,13 @@ async def stdio_client(server: StdioServerParameters, errlog: TextIO = sys.stder
         except anyio.ClosedResourceError:
             await anyio.lowlevel.checkpoint()
 
-    async with (
-        anyio.create_task_group() as tg,
-        process,
-    ):
+    async with anyio.create_task_group() as tg, process:
         tg.start_soon(stdout_reader)
         tg.start_soon(stdin_writer)
+
         try:
-            yield read_stream, write_stream
+            async with read_stream, write_stream:
+                yield read_stream, write_stream
         finally:
             # MCP spec: stdio shutdown sequence
             # 1. Close input stream to server
@@ -208,10 +192,6 @@ async def stdio_client(server: StdioServerParameters, errlog: TextIO = sys.stder
             except ProcessLookupError:
                 # Process already exited, which is fine
                 pass
-            await read_stream.aclose()
-            await write_stream.aclose()
-            await read_stream_writer.aclose()
-            await write_stream_reader.aclose()
 
 
 def _get_executable_command(command: str) -> str:
