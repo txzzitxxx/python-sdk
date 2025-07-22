@@ -167,8 +167,7 @@ async def stdio_client(server: StdioServerParameters, errlog: TextIO = sys.stder
         tg.start_soon(stdin_writer)
 
         try:
-            async with read_stream, write_stream:
-                yield read_stream, write_stream
+            yield read_stream, write_stream
         finally:
             # MCP spec: stdio shutdown sequence
             # 1. Close input stream to server
@@ -194,6 +193,8 @@ async def stdio_client(server: StdioServerParameters, errlog: TextIO = sys.stder
                 pass
             await read_stream_writer.aclose()
             await write_stream_reader.aclose()
+            await read_stream.aclose()
+            await write_stream.aclose()
 
 
 def _get_executable_command(command: str) -> str:
