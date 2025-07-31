@@ -89,10 +89,10 @@ def main(port: int, transport: str) -> int:
         )
 
     if transport == "sse":
+        from mcp.server.fastmcp.server import SilentResponse
         from mcp.server.sse import SseServerTransport
         from starlette.applications import Starlette
         from starlette.routing import Mount, Route
-        from mcp.server.fastmcp.server import SilentResponse
 
         sse = SseServerTransport("/messages/")
 
