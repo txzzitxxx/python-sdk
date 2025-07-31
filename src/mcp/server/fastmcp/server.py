@@ -58,8 +58,8 @@ class SilentResponse(Response):
     def __init__(self) -> None:
         super().__init__()
 
-    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> Awaitable[None]:
-        pass
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        return
 
 
 class Settings(BaseSettings, Generic[LifespanResultT]):
