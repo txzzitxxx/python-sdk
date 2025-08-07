@@ -7,6 +7,7 @@ and session management.
 """
 
 import logging
+import warnings
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
@@ -458,6 +459,9 @@ async def streamablehttp_client(
     """
     Client transport for StreamableHTTP.
 
+    .. deprecated::
+        Use :class:`StreamableHTTPClient` instead. This function will be removed in a future version.
+
     `sse_read_timeout` determines how long (in seconds) the client will wait for a new
     event before disconnecting. All other HTTP operations are controlled by `timeout`.
 
@@ -467,47 +471,25 @@ async def streamablehttp_client(
             - write_stream: Stream for sending messages to the server
             - get_session_id_callback: Function to retrieve the current session ID
     """
-    transport = StreamableHTTPTransport(url, headers, timeout, sse_read_timeout, auth)
+    warnings.warn(
+        "streamablehttp_client is deprecated. Use StreamableHTTPClient class instead.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
 
-    read_stream_writer, read_stream = anyio.create_memory_object_stream[SessionMessage | Exception](0)
-    write_stream, write_stream_reader = anyio.create_memory_object_stream[SessionMessage](0)
+    # Use the new StreamableHTTPClient class
+    client = StreamableHTTPClient(
+        url=url,
+        headers=headers,
+        timeout=timeout,
+        sse_read_timeout=sse_read_timeout,
+        terminate_on_close=terminate_on_close,
+        httpx_client_factory=httpx_client_factory,
+        auth=auth,
+    )
 
-    async with anyio.create_task_group() as tg:
-        try:
-            logger.debug(f"Connecting to StreamableHTTP endpoint: {url}")
-
-            async with httpx_client_factory(
-                headers=transport.request_headers,
-                timeout=httpx.Timeout(transport.timeout, read=transport.sse_read_timeout),
-                auth=transport.auth,
-            ) as client:
-                # Define callbacks that need access to tg
-                def start_get_stream() -> None:
-                    tg.start_soon(transport.handle_get_stream, client, read_stream_writer)
-
-                tg.start_soon(
-                    transport.post_writer,
-                    client,
-                    write_stream_reader,
-                    read_stream_writer,
-                    write_stream,
-                    start_get_stream,
-                    tg,
-                )
-
-                try:
-                    yield (
-                        read_stream,
-                        write_stream,
-                        transport.get_session_id,
-                    )
-                finally:
-                    if transport.session_id and terminate_on_close:
-                        await transport.terminate_session(client)
-                    tg.cancel_scope.cancel()
-        finally:
-            await read_stream_writer.aclose()
-            await write_stream.aclose()
+    async with client.connect() as streams:
+        yield streams
 
 
 class StreamableHTTPClient:
