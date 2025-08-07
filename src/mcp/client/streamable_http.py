@@ -11,6 +11,7 @@ from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import timedelta
+from types import TracebackType
 
 import anyio
 import httpx
@@ -507,3 +508,128 @@ async def streamablehttp_client(
         finally:
             await read_stream_writer.aclose()
             await write_stream.aclose()
+
+
+class StreamableHTTPClient:
+    """Context manager for StreamableHTTP client transport.
+
+    A cleaner replacement for the streamablehttp_client function that provides
+    the same interface but with better encapsulation and maintainability.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        headers: dict[str, str] | None = None,
+        timeout: float | timedelta = 30,
+        sse_read_timeout: float | timedelta = 60 * 5,
+        terminate_on_close: bool = True,
+        httpx_client_factory: McpHttpClientFactory = create_mcp_http_client,
+        auth: httpx.Auth | None = None,
+    ) -> None:
+        """Initialize the StreamableHTTP client transport.
+
+        Args:
+            url: The endpoint URL.
+            headers: Optional headers to include in requests.
+            timeout: HTTP timeout for regular operations.
+            sse_read_timeout: Timeout for SSE read operations.
+            terminate_on_close: Whether to terminate the session on close.
+            httpx_client_factory: Factory function for creating httpx clients.
+            auth: Optional HTTPX authentication handler.
+        """
+        self.transport = StreamableHTTPTransport(
+            url,
+            headers,
+            timeout,
+            sse_read_timeout,
+            auth,
+        )
+        self.terminate_on_close = terminate_on_close
+        self.httpx_client_factory = httpx_client_factory
+        self._context_manager = None
+
+    @asynccontextmanager
+    async def connect(
+        self,
+    ) -> AsyncGenerator[
+        tuple[
+            MemoryObjectReceiveStream[SessionMessage | Exception],
+            MemoryObjectSendStream[SessionMessage],
+            GetSessionIdCallback,
+        ],
+        None,
+    ]:
+        """Connect to the StreamableHTTP endpoint and yield communication streams.
+
+        This method provides the same interface as the streamablehttp_client function,
+        yielding a tuple of (read_stream, write_stream, get_session_id_callback).
+
+        Yields:
+            Tuple containing:
+                - read_stream: Stream for reading messages from the server
+                - write_stream: Stream for sending messages to the server
+                - get_session_id_callback: Function to retrieve the current session ID
+        """
+        read_stream_writer, read_stream = anyio.create_memory_object_stream[SessionMessage | Exception](0)
+        write_stream, write_stream_reader = anyio.create_memory_object_stream[SessionMessage](0)
+
+        async with anyio.create_task_group() as tg:
+            try:
+                logger.debug(f"Connecting to StreamableHTTP endpoint: {self.transport.url}")
+
+                async with self.httpx_client_factory(
+                    headers=self.transport.request_headers,
+                    timeout=httpx.Timeout(self.transport.timeout, read=self.transport.sse_read_timeout),
+                    auth=self.transport.auth,
+                ) as client:
+                    # Define callbacks that need access to tg
+                    def start_get_stream() -> None:
+                        tg.start_soon(self.transport.handle_get_stream, client, read_stream_writer)
+
+                    tg.start_soon(
+                        self.transport.post_writer,
+                        client,
+                        write_stream_reader,
+                        read_stream_writer,
+                        write_stream,
+                        start_get_stream,
+                        tg,
+                    )
+
+                    try:
+                        yield (
+                            read_stream,
+                            write_stream,
+                            self.transport.get_session_id,
+                        )
+                    finally:
+                        if self.transport.session_id and self.terminate_on_close:
+                            await self.transport.terminate_session(client)
+                        tg.cancel_scope.cancel()
+            finally:
+                await read_stream_writer.aclose()
+                await write_stream.aclose()
+
+    # Provide backwards compatibility as async context manager
+    async def __aenter__(
+        self,
+    ) -> tuple[
+        MemoryObjectReceiveStream[SessionMessage | Exception],
+        MemoryObjectSendStream[SessionMessage],
+        GetSessionIdCallback,
+    ]:
+        """Enter the async context manager and return communication streams."""
+        self._context_manager = self.connect()
+        return await self._context_manager.__aenter__()
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
+        """Exit the async context manager and clean up resources."""
+        if self._context_manager:
+            await self._context_manager.__aexit__(exc_type, exc_val, exc_tb)
+            self._context_manager = None
