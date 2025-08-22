@@ -151,7 +151,6 @@ class ClientSession(
         result = await self.send_request(
             types.ClientRequest(
                 types.InitializeRequest(
-                    method="initialize",
                     params=types.InitializeRequestParams(
                         protocolVersion=types.LATEST_PROTOCOL_VERSION,
                         capabilities=types.ClientCapabilities(
@@ -171,7 +170,7 @@ class ClientSession(
             raise RuntimeError(f"Unsupported protocol version from the server: {result.protocolVersion}")
 
         await self.send_notification(
-            types.ClientNotification(types.InitializedNotification(method="notifications/initialized"))
+            types.ClientNotification(types.InitializedNotification())
         )
 
         return result
@@ -179,11 +178,7 @@ class ClientSession(
     async def send_ping(self) -> types.EmptyResult:
         """Send a ping request."""
         return await self.send_request(
-            types.ClientRequest(
-                types.PingRequest(
-                    method="ping",
-                )
-            ),
+            types.ClientRequest(types.PingRequest()),
             types.EmptyResult,
         )
 
@@ -198,7 +193,6 @@ class ClientSession(
         await self.send_notification(
             types.ClientNotification(
                 types.ProgressNotification(
-                    method="notifications/progress",
                     params=types.ProgressNotificationParams(
                         progressToken=progress_token,
                         progress=progress,
@@ -214,7 +208,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.SetLevelRequest(
-                    method="logging/setLevel",
                     params=types.SetLevelRequestParams(level=level),
                 )
             ),
@@ -226,7 +219,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.ListResourcesRequest(
-                    method="resources/list",
                     params=types.PaginatedRequestParams(cursor=cursor) if cursor is not None else None,
                 )
             ),
@@ -238,7 +230,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.ListResourceTemplatesRequest(
-                    method="resources/templates/list",
                     params=types.PaginatedRequestParams(cursor=cursor) if cursor is not None else None,
                 )
             ),
@@ -250,7 +241,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.ReadResourceRequest(
-                    method="resources/read",
                     params=types.ReadResourceRequestParams(uri=uri),
                 )
             ),
@@ -262,7 +252,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.SubscribeRequest(
-                    method="resources/subscribe",
                     params=types.SubscribeRequestParams(uri=uri),
                 )
             ),
@@ -274,7 +263,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.UnsubscribeRequest(
-                    method="resources/unsubscribe",
                     params=types.UnsubscribeRequestParams(uri=uri),
                 )
             ),
@@ -293,7 +281,6 @@ class ClientSession(
         result = await self.send_request(
             types.ClientRequest(
                 types.CallToolRequest(
-                    method="tools/call",
                     params=types.CallToolRequestParams(
                         name=name,
                         arguments=arguments,
@@ -337,7 +324,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.ListPromptsRequest(
-                    method="prompts/list",
                     params=types.PaginatedRequestParams(cursor=cursor) if cursor is not None else None,
                 )
             ),
@@ -349,7 +335,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.GetPromptRequest(
-                    method="prompts/get",
                     params=types.GetPromptRequestParams(name=name, arguments=arguments),
                 )
             ),
@@ -370,7 +355,6 @@ class ClientSession(
         return await self.send_request(
             types.ClientRequest(
                 types.CompleteRequest(
-                    method="completion/complete",
                     params=types.CompleteRequestParams(
                         ref=ref,
                         argument=types.CompletionArgument(**argument),
@@ -386,7 +370,6 @@ class ClientSession(
         result = await self.send_request(
             types.ClientRequest(
                 types.ListToolsRequest(
-                    method="tools/list",
                     params=types.PaginatedRequestParams(cursor=cursor) if cursor is not None else None,
                 )
             ),
@@ -405,7 +388,6 @@ class ClientSession(
         await self.send_notification(
             types.ClientNotification(
                 types.RootsListChangedNotification(
-                    method="notifications/roots/list_changed",
                 )
             )
         )

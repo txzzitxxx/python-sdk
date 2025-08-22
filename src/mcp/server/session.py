@@ -186,7 +186,6 @@ class ServerSession(
         await self.send_notification(
             types.ServerNotification(
                 types.LoggingMessageNotification(
-                    method="notifications/message",
                     params=types.LoggingMessageNotificationParams(
                         level=level,
                         data=data,
@@ -202,7 +201,6 @@ class ServerSession(
         await self.send_notification(
             types.ServerNotification(
                 types.ResourceUpdatedNotification(
-                    method="notifications/resources/updated",
                     params=types.ResourceUpdatedNotificationParams(uri=uri),
                 )
             )
@@ -225,7 +223,6 @@ class ServerSession(
         return await self.send_request(
             request=types.ServerRequest(
                 types.CreateMessageRequest(
-                    method="sampling/createMessage",
                     params=types.CreateMessageRequestParams(
                         messages=messages,
                         systemPrompt=system_prompt,
@@ -249,7 +246,6 @@ class ServerSession(
         return await self.send_request(
             types.ServerRequest(
                 types.ListRootsRequest(
-                    method="roots/list",
                 )
             ),
             types.ListRootsResult,
@@ -273,7 +269,6 @@ class ServerSession(
         return await self.send_request(
             types.ServerRequest(
                 types.ElicitRequest(
-                    method="elicitation/create",
                     params=types.ElicitRequestParams(
                         message=message,
                         requestedSchema=requestedSchema,
@@ -289,7 +284,6 @@ class ServerSession(
         return await self.send_request(
             types.ServerRequest(
                 types.PingRequest(
-                    method="ping",
                 )
             ),
             types.EmptyResult,
@@ -307,7 +301,6 @@ class ServerSession(
         await self.send_notification(
             types.ServerNotification(
                 types.ProgressNotification(
-                    method="notifications/progress",
                     params=types.ProgressNotificationParams(
                         progressToken=progress_token,
                         progress=progress,
@@ -324,7 +317,6 @@ class ServerSession(
         await self.send_notification(
             types.ServerNotification(
                 types.ResourceListChangedNotification(
-                    method="notifications/resources/list_changed",
                 )
             )
         )
@@ -334,7 +326,6 @@ class ServerSession(
         await self.send_notification(
             types.ServerNotification(
                 types.ToolListChangedNotification(
-                    method="notifications/tools/list_changed",
                 )
             )
         )
@@ -344,7 +335,6 @@ class ServerSession(
         await self.send_notification(
             types.ServerNotification(
                 types.PromptListChangedNotification(
-                    method="notifications/prompts/list_changed",
                 )
             )
         )
