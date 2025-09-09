@@ -520,8 +520,7 @@ _Full example: [examples/snippets/servers/basic_prompt.py](https://github.com/mo
 MCP servers can provide icons for UI display. Icons can be added to the server implementation, tools, resources, and prompts:
 
 ```python
-from mcp.server.fastmcp import FastMCP
-from mcp.types import Icon
+from mcp.server.fastmcp import FastMCP, Icon
 
 # Create an icon from a file path or URL
 icon = Icon(

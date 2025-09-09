@@ -7,8 +7,7 @@ Demonstrates using icons with tools, resources, prompts, and implementation.
 import base64
 from pathlib import Path
 
-from mcp.server.fastmcp import FastMCP
-from mcp.types import Icon
+from mcp.server.fastmcp import FastMCP, Icon
 
 # Load the icon file and convert to data URI
 icon_path = Path(__file__).parent / "mcp.png"
