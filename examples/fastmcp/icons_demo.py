@@ -16,7 +16,7 @@ with open(icon_path, "rb") as f:
     icon_data = base64.b64encode(f.read()).decode("utf-8")
     icon_data_uri = f"data:image/png;base64,{icon_data}"
 
-icon_data = Icon(src=icon_data_uri, mimeType="image/png", sizes="32x32")
+icon_data = Icon(src=icon_data_uri, mimeType="image/png", sizes="64x64")
 
 # Create server with icons in implementation
 mcp = FastMCP(
