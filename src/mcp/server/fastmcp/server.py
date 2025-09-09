@@ -215,6 +215,14 @@ class FastMCP(Generic[LifespanResultT]):
         return self._mcp_server.instructions
 
     @property
+    def website_url(self) -> str | None:
+        return self._mcp_server.website_url
+
+    @property
+    def icons(self) -> list[Icon] | None:
+        return self._mcp_server.icons
+
+    @property
     def session_manager(self) -> StreamableHTTPSessionManager:
         """Get the StreamableHTTP session manager.
 
