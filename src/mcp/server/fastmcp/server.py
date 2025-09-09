@@ -119,7 +119,7 @@ def lifespan_wrapper(
 
 
 class FastMCP(Generic[LifespanResultT]):
-    def __init__(
+    def __init__(  # noqa: PLR0913
         self,
         name: str | None = None,
         instructions: str | None = None,

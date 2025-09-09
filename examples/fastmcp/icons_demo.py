@@ -18,9 +18,7 @@ with open(icon_path, "rb") as f:
 icon_data = Icon(src=icon_data_uri, mimeType="image/png", sizes="64x64")
 
 # Create server with icons in implementation
-mcp = FastMCP(
-    "Icons Demo Server", website_url="https://github.com/modelcontextprotocol/python-sdk", icons=[icon_data]
-)
+mcp = FastMCP("Icons Demo Server", website_url="https://github.com/modelcontextprotocol/python-sdk", icons=[icon_data])
 
 
 @mcp.tool(icons=[icon_data])
