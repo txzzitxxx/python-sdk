@@ -78,6 +78,7 @@ class ResourceTemplate(BaseModel):
                 description=self.description,
                 mime_type=self.mime_type,
                 fn=lambda: result,  # Capture result in closure
+                icons=None,  # Resource templates don't support icons
             )
         except Exception as e:
             raise ValueError(f"Error creating resource from template: {e}")
