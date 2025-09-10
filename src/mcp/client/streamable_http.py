@@ -257,41 +257,48 @@ class StreamableHTTPTransport:
         message = ctx.session_message.message
         is_initialization = self._is_initialization_request(message)
 
-        async with ctx.client.stream(
-            "POST",
-            self.url,
-            json=message.model_dump(by_alias=True, mode="json", exclude_none=True),
-            headers=headers,
-        ) as response:
-            if response.status_code == 202:
-                logger.debug("Received 202 Accepted")
-                return
+        try:
+            async with ctx.client.stream(
+                "POST",
+                self.url,
+                json=message.model_dump(by_alias=True, mode="json", exclude_none=True),
+                headers=headers,
+            ) as response:
+                if response.status_code == 202:
+                    logger.debug("Received 202 Accepted")
+                    return
 
-            if response.status_code == 404:
+                if response.status_code == 404:
+                    if isinstance(message.root, JSONRPCRequest):
+                        await self._send_session_terminated_error(
+                            ctx.read_stream_writer,
+                            message.root.id,
+                        )
+                    return
+
+                response.raise_for_status()
+                if is_initialization:
+                    self._maybe_extract_session_id_from_response(response)
+
+                # Per https://modelcontextprotocol.io/specification/2025-06-18/basic#notifications:
+                # The server MUST NOT send a response to notifications.
                 if isinstance(message.root, JSONRPCRequest):
-                    await self._send_session_terminated_error(
-                        ctx.read_stream_writer,
-                        message.root.id,
-                    )
-                return
-
-            response.raise_for_status()
-            if is_initialization:
-                self._maybe_extract_session_id_from_response(response)
-
-            # Per https://modelcontextprotocol.io/specification/2025-06-18/basic#notifications:
-            # The server MUST NOT send a response to notifications.
+                    content_type = response.headers.get(CONTENT_TYPE, "").lower()
+                    if content_type.startswith(JSON):
+                        await self._handle_json_response(response, ctx.read_stream_writer, is_initialization)
+                    elif content_type.startswith(SSE):
+                        await self._handle_sse_response(response, ctx, is_initialization)
+                    else:
+                        await self._handle_unexpected_content_type(
+                            content_type,
+                            ctx.read_stream_writer,
+                        )
+        except Exception as exc:
+            logger.exception("Failed to send post request")
             if isinstance(message.root, JSONRPCRequest):
-                content_type = response.headers.get(CONTENT_TYPE, "").lower()
-                if content_type.startswith(JSON):
-                    await self._handle_json_response(response, ctx.read_stream_writer, is_initialization)
-                elif content_type.startswith(SSE):
-                    await self._handle_sse_response(response, ctx, is_initialization)
-                else:
-                    await self._handle_unexpected_content_type(
-                        content_type,
-                        ctx.read_stream_writer,
-                    )
+                await self._send_session_terminated_error(
+                    ctx.read_stream_writer, message.root.id, f"Failed to send POST request: {exc}"
+                )
 
     async def _handle_json_response(
         self,
@@ -353,12 +360,13 @@ class StreamableHTTPTransport:
         self,
         read_stream_writer: StreamWriter,
         request_id: RequestId,
+        message: str = "Session terminated",
     ) -> None:
         """Send a session terminated error response."""
         jsonrpc_error = JSONRPCError(
             jsonrpc="2.0",
             id=request_id,
-            error=ErrorData(code=32600, message="Session terminated"),
+            error=ErrorData(code=32600, message=message),
         )
         session_message = SessionMessage(JSONRPCMessage(jsonrpc_error))
         await read_stream_writer.send(session_message)
