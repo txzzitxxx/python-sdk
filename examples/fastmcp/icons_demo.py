@@ -10,8 +10,8 @@ from pathlib import Path
 from mcp.server.fastmcp import FastMCP, Icon
 
 # Load the icon file and convert to data URI
-icon_path = Path(__file__).parent / "mcp.png"  
-icon_data = base64.standard_b64encode(icon_path.read_bytes()).decode()  
+icon_path = Path(__file__).parent / "mcp.png"
+icon_data = base64.standard_b64encode(icon_path.read_bytes()).decode()
 icon_data_uri = f"data:image/png;base64,{icon_data}"
 
 icon_data = Icon(src=icon_data_uri, mimeType="image/png", sizes="64x64")
