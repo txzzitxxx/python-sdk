@@ -4,10 +4,9 @@ from typing import Any
 import pytest
 
 from mcp import types
-from mcp.server.lowlevel.func_inspection import accepts_request
+from mcp.server.lowlevel.func_inspection import accepts_single_positional_arg
 
 
-# Test fixtures - functions and methods with various signatures
 class MyClass:
     async def no_request_method(self):
         """Instance method without request parameter"""
@@ -161,8 +160,12 @@ async def mixed_positional_and_keyword(request: types.ListPromptsRequest, *, ext
     ],
     ids=lambda x: x if isinstance(x, str) else "",
 )
-def test_accepts_request(callable_obj: Callable[..., Any], expected: bool, description: str):
-    """Test that accepts_request correctly identifies functions that accept a request parameter.
+def test_accepts_single_positional_arg(callable_obj: Callable[..., Any], expected: bool, description: str):
+    """Test that `accepts_single_positional_arg` correctly identifies functions that accept a single argument.
+
+    `accepts_single_positional_arg` is currently only used in the case of
+    the lowlevel server code checking whether a handler accepts a request
+    argument, so the test cases reference a "request" param/arg.
 
     The function should return True if the callable can potentially accept a positional
     request argument. Returns False if:
@@ -170,4 +173,4 @@ def test_accepts_request(callable_obj: Callable[..., Any], expected: bool, descr
     - Only keyword-only parameters that ALL have defaults (can call with no args)
     - Only **kwargs parameter (can't accept positional arguments)
     """
-    assert accepts_request(callable_obj) == expected, f"Failed for {description}"
+    assert accepts_single_positional_arg(callable_obj) == expected, f"Failed for {description}"

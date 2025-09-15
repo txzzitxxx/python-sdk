@@ -82,7 +82,7 @@ from pydantic import AnyUrl
 from typing_extensions import TypeVar
 
 import mcp.types as types
-from mcp.server.lowlevel.func_inspection import accepts_request
+from mcp.server.lowlevel.func_inspection import accepts_single_positional_arg
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.models import InitializationOptions
 from mcp.server.session import ServerSession
@@ -235,7 +235,7 @@ class Server(Generic[LifespanResultT, RequestT]):
             | Callable[[types.ListPromptsRequest], Awaitable[types.ListPromptsResult]],
         ):
             logger.debug("Registering handler for PromptListRequest")
-            pass_request = accepts_request(func)
+            pass_request = accepts_single_positional_arg(func)
 
             if pass_request:
                 request_func = cast(Callable[[types.ListPromptsRequest], Awaitable[types.ListPromptsResult]], func)
@@ -280,7 +280,7 @@ class Server(Generic[LifespanResultT, RequestT]):
             | Callable[[types.ListResourcesRequest], Awaitable[types.ListResourcesResult]],
         ):
             logger.debug("Registering handler for ListResourcesRequest")
-            pass_request = accepts_request(func)
+            pass_request = accepts_single_positional_arg(func)
 
             if pass_request:
                 request_func = cast(Callable[[types.ListResourcesRequest], Awaitable[types.ListResourcesResult]], func)
@@ -420,7 +420,7 @@ class Server(Generic[LifespanResultT, RequestT]):
             | Callable[[types.ListToolsRequest], Awaitable[types.ListToolsResult]],
         ):
             logger.debug("Registering handler for ListToolsRequest")
-            pass_request = accepts_request(func)
+            pass_request = accepts_single_positional_arg(func)
 
             if pass_request:
                 request_func = cast(Callable[[types.ListToolsRequest], Awaitable[types.ListToolsResult]], func)
