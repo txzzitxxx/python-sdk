@@ -1,5 +1,7 @@
 """Basic tests for list_prompts, list_resources, and list_tools decorators without pagination."""
 
+import warnings
+
 import pytest
 from pydantic import AnyUrl
 
@@ -28,9 +30,12 @@ async def test_list_prompts_basic() -> None:
         Prompt(name="prompt2", description="Second prompt"),
     ]
 
-    @server.list_prompts()
-    async def handle_list_prompts() -> list[Prompt]:
-        return test_prompts
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+
+        @server.list_prompts()
+        async def handle_list_prompts() -> list[Prompt]:
+            return test_prompts
 
     handler = server.request_handlers[ListPromptsRequest]
     request = ListPromptsRequest(method="prompts/list", params=None)
@@ -51,9 +56,12 @@ async def test_list_resources_basic() -> None:
         Resource(uri=AnyUrl("file:///test2.txt"), name="Test 2"),
     ]
 
-    @server.list_resources()
-    async def handle_list_resources() -> list[Resource]:
-        return test_resources
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+
+        @server.list_resources()
+        async def handle_list_resources() -> list[Resource]:
+            return test_resources
 
     handler = server.request_handlers[ListResourcesRequest]
     request = ListResourcesRequest(method="resources/list", params=None)
@@ -95,9 +103,12 @@ async def test_list_tools_basic() -> None:
         ),
     ]
 
-    @server.list_tools()
-    async def handle_list_tools() -> list[Tool]:
-        return test_tools
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+
+        @server.list_tools()
+        async def handle_list_tools() -> list[Tool]:
+            return test_tools
 
     handler = server.request_handlers[ListToolsRequest]
     request = ListToolsRequest(method="tools/list", params=None)
@@ -113,9 +124,12 @@ async def test_list_prompts_empty() -> None:
     """Test listing with empty results."""
     server = Server("test")
 
-    @server.list_prompts()
-    async def handle_list_prompts() -> list[Prompt]:
-        return []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+
+        @server.list_prompts()
+        async def handle_list_prompts() -> list[Prompt]:
+            return []
 
     handler = server.request_handlers[ListPromptsRequest]
     request = ListPromptsRequest(method="prompts/list", params=None)
@@ -131,9 +145,12 @@ async def test_list_resources_empty() -> None:
     """Test listing with empty results."""
     server = Server("test")
 
-    @server.list_resources()
-    async def handle_list_resources() -> list[Resource]:
-        return []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+
+        @server.list_resources()
+        async def handle_list_resources() -> list[Resource]:
+            return []
 
     handler = server.request_handlers[ListResourcesRequest]
     request = ListResourcesRequest(method="resources/list", params=None)
@@ -149,9 +166,12 @@ async def test_list_tools_empty() -> None:
     """Test listing with empty results."""
     server = Server("test")
 
-    @server.list_tools()
-    async def handle_list_tools() -> list[Tool]:
-        return []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", DeprecationWarning)
+
+        @server.list_tools()
+        async def handle_list_tools() -> list[Tool]:
+            return []
 
     handler = server.request_handlers[ListToolsRequest]
     request = ListToolsRequest(method="tools/list", params=None)
