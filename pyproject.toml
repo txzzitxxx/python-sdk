@@ -165,7 +165,7 @@ MD059=false  # descriptive-link-text
 
 # https://coverage.readthedocs.io/en/latest/config.html#run
 [tool.coverage.run]
-brach = true
+branch = true
 patch = ["subprocess"]
 concurrency = ["multiprocessing", "thread"]
 source = ["src", "tests"]
