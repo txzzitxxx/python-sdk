@@ -11,7 +11,7 @@ Usage:
 
 2. Define request handlers using decorators:
    @server.list_prompts()
-   async def handle_list_prompts() -> list[types.Prompt]:
+   async def handle_list_prompts(request: types.ListPromptsRequest) -> types.ListPromptsResult:
        # Implementation
 
    @server.get_prompt()
@@ -21,7 +21,7 @@ Usage:
        # Implementation
 
    @server.list_tools()
-   async def handle_list_tools() -> list[types.Tool]:
+   async def handle_list_tools(request: types.ListToolsRequest) -> types.ListToolsResult:
        # Implementation
 
    @server.call_tool()
@@ -82,7 +82,7 @@ from pydantic import AnyUrl
 from typing_extensions import TypeVar
 
 import mcp.types as types
-from mcp.server.lowlevel.func_inspection import issue_deprecation_warning, should_pass_request
+from mcp.server.lowlevel.func_inspection import create_call_wrapper
 from mcp.server.lowlevel.helper_types import ReadResourceContents
 from mcp.server.models import InitializationOptions
 from mcp.server.session import ServerSession
@@ -235,27 +235,21 @@ class Server(Generic[LifespanResultT, RequestT]):
             | Callable[[types.ListPromptsRequest], Awaitable[types.ListPromptsResult]],
         ):
             logger.debug("Registering handler for PromptListRequest")
-            pass_request, should_deprecate = should_pass_request(func, types.ListPromptsRequest)
 
-            if should_deprecate:
-                issue_deprecation_warning(func, types.ListPromptsRequest)
+            # Create wrapper that knows how to call func with the request
+            wrapper, _ = create_call_wrapper(func, types.ListPromptsRequest)
 
-            if pass_request:
-                request_func = cast(Callable[[types.ListPromptsRequest], Awaitable[types.ListPromptsResult]], func)
+            # if should_deprecate:
+            #     issue_deprecation_warning(func, types.ListPromptsRequest)
 
-                async def request_handler(req: types.ListPromptsRequest):
-                    result = await request_func(req)
+            async def handler(req: types.ListPromptsRequest):
+                result = await wrapper(req)
+                # Handle both old style (list[Prompt]) and new style (ListPromptsResult)
+                if isinstance(result, types.ListPromptsResult):
                     return types.ServerResult(result)
-
-                handler = request_handler
-            else:
-                list_func = cast(Callable[[], Awaitable[list[types.Prompt]]], func)
-
-                async def list_handler(_: types.ListPromptsRequest):
-                    result = await list_func()
+                else:
+                    # Old style returns list[Prompt]
                     return types.ServerResult(types.ListPromptsResult(prompts=result))
-
-                handler = list_handler
 
             self.request_handlers[types.ListPromptsRequest] = handler
             return func
@@ -283,27 +277,22 @@ class Server(Generic[LifespanResultT, RequestT]):
             | Callable[[types.ListResourcesRequest], Awaitable[types.ListResourcesResult]],
         ):
             logger.debug("Registering handler for ListResourcesRequest")
-            pass_request, should_deprecate = should_pass_request(func, types.ListResourcesRequest)
 
-            if should_deprecate:
-                issue_deprecation_warning(func, types.ListResourcesRequest)
+            # Create wrapper that knows how to call func with the request
+            wrapper, _ = create_call_wrapper(func, types.ListResourcesRequest)
 
-            if pass_request:
-                request_func = cast(Callable[[types.ListResourcesRequest], Awaitable[types.ListResourcesResult]], func)
+            # TODO: Decide whether we want this sort of deprecation in a later PR
+            # if should_deprecate:
+            #     issue_deprecation_warning(func, types.ListResourcesRequest)
 
-                async def request_handler(req: types.ListResourcesRequest):
-                    result = await request_func(req)
+            async def handler(req: types.ListResourcesRequest):
+                result = await wrapper(req)
+                # Handle both old style (list[Resource]) and new style (ListResourcesResult)
+                if isinstance(result, types.ListResourcesResult):
                     return types.ServerResult(result)
-
-                handler = request_handler
-            else:
-                list_func = cast(Callable[[], Awaitable[list[types.Resource]]], func)
-
-                async def list_handler(_: types.ListResourcesRequest):
-                    result = await list_func()
+                else:
+                    # Old style returns list[Resource]
                     return types.ServerResult(types.ListResourcesResult(resources=result))
-
-                handler = list_handler
 
             self.request_handlers[types.ListResourcesRequest] = handler
             return func
@@ -426,34 +415,30 @@ class Server(Generic[LifespanResultT, RequestT]):
             | Callable[[types.ListToolsRequest], Awaitable[types.ListToolsResult]],
         ):
             logger.debug("Registering handler for ListToolsRequest")
-            pass_request, should_deprecate = should_pass_request(func, types.ListToolsRequest)
 
-            if should_deprecate:
-                issue_deprecation_warning(func, types.ListToolsRequest)
+            # Create wrapper that knows how to call func with the request
+            wrapper, _ = create_call_wrapper(func, types.ListToolsRequest)
 
-            if pass_request:
-                request_func = cast(Callable[[types.ListToolsRequest], Awaitable[types.ListToolsResult]], func)
+            # TODO: Decide whether we want this sort of deprecation in a later PR
+            # if should_deprecate:
+            #     issue_deprecation_warning(func, types.ListToolsRequest)
 
-                async def request_handler(req: types.ListToolsRequest):
-                    result = await request_func(req)
+            async def handler(req: types.ListToolsRequest):
+                result = await wrapper(req)
+
+                # Handle both old style (list[Tool]) and new style (ListToolsResult)
+                if isinstance(result, types.ListToolsResult):
                     # Refresh the tool cache with returned tools
                     for tool in result.tools:
                         self._tool_cache[tool.name] = tool
                     return types.ServerResult(result)
-
-                handler = request_handler
-            else:
-                list_func = cast(Callable[[], Awaitable[list[types.Tool]]], func)
-
-                async def list_handler(req: types.ListToolsRequest):
-                    result = await list_func()
+                else:
+                    # Old style returns list[Tool]
                     # Clear and refresh the entire tool cache
                     self._tool_cache.clear()
                     for tool in result:
                         self._tool_cache[tool.name] = tool
                     return types.ServerResult(types.ListToolsResult(tools=result))
-
-                handler = list_handler
 
             self.request_handlers[types.ListToolsRequest] = handler
             return func

@@ -1,176 +1,361 @@
-from collections.abc import Callable
-from typing import Any
+"""Unit tests for func_inspection module.
+
+Tests the create_call_wrapper function which determines how to call handler functions
+with different parameter signatures and type hints.
+"""
+
+from typing import Any, Generic, TypeVar
 
 import pytest
 
-from mcp import types
-from mcp.server.lowlevel.func_inspection import accepts_single_positional_arg
+from mcp.server.lowlevel.func_inspection import create_call_wrapper
+from mcp.types import ListPromptsRequest, ListResourcesRequest, ListToolsRequest, PaginatedRequestParams
+
+T = TypeVar("T")
 
 
-class MyClass:
-    async def no_request_method(self):
-        """Instance method without request parameter"""
-        pass
+@pytest.mark.anyio
+async def test_no_params_returns_deprecated_wrapper() -> None:
+    """Test: def foo() - should call without request and mark as deprecated."""
+    called_without_request = False
 
-    # noinspection PyMethodParameters
-    async def no_request_method_bad_self_name(bad):  # pyright: ignore[reportSelfClsParameterName]
-        """Instance method without request parameter, but with bad self name"""
-        pass
+    async def handler() -> list[str]:
+        nonlocal called_without_request
+        called_without_request = True
+        return ["test"]
 
-    async def request_method(self, request: types.ListPromptsRequest):
-        """Instance method with request parameter"""
-        pass
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
 
-    # noinspection PyMethodParameters
-    async def request_method_bad_self_name(bad, request: types.ListPromptsRequest):  # pyright: ignore[reportSelfClsParameterName]
-        """Instance method with request parameter, but with bad self name"""
-        pass
+    assert should_deprecate is True
 
-    @classmethod
-    async def no_request_class_method(cls):
-        """Class method without request parameter"""
-        pass
-
-    # noinspection PyMethodParameters
-    @classmethod
-    async def no_request_class_method_bad_cls_name(bad):  # pyright: ignore[reportSelfClsParameterName]
-        """Class method without request parameter, but with bad cls name"""
-        pass
-
-    @classmethod
-    async def request_class_method(cls, request: types.ListPromptsRequest):
-        """Class method with request parameter"""
-        pass
-
-    # noinspection PyMethodParameters
-    @classmethod
-    async def request_class_method_bad_cls_name(bad, request: types.ListPromptsRequest):  # pyright: ignore[reportSelfClsParameterName]
-        """Class method with request parameter, but with bad cls name"""
-        pass
-
-    @staticmethod
-    async def no_request_static_method():
-        """Static method without request parameter"""
-        pass
-
-    @staticmethod
-    async def request_static_method(request: types.ListPromptsRequest):
-        """Static method with request parameter"""
-        pass
-
-    @staticmethod
-    async def request_static_method_bad_arg_name(self: types.ListPromptsRequest):  # pyright: ignore[reportSelfClsParameterName] # noqa: PLW0211
-        """Static method with request parameter, but the request argument is named self"""
-        pass
+    # Wrapper should call handler without passing request
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    result = await wrapper(request)
+    assert called_without_request is True
+    assert result == ["test"]
 
 
-async def no_request_func():
-    """Function without request parameter"""
-    pass
+@pytest.mark.anyio
+async def test_param_with_default_returns_deprecated_wrapper() -> None:
+    """Test: def foo(thing: int = 1) - should call without request and mark as deprecated."""
+    called_without_request = False
+
+    async def handler(thing: int = 1) -> list[str]:
+        nonlocal called_without_request
+        called_without_request = True
+        return [f"test-{thing}"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is True
+
+    # Wrapper should call handler without passing request (uses default value)
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    result = await wrapper(request)
+    assert called_without_request is True
+    assert result == ["test-1"]
 
 
-async def request_func(request: types.ListPromptsRequest):
-    """Function with request parameter"""
-    pass
+@pytest.mark.anyio
+async def test_typed_request_param_passes_request() -> None:
+    """Test: def foo(req: ListPromptsRequest) - should pass request through."""
+    received_request = None
+
+    async def handler(req: ListPromptsRequest) -> list[str]:
+        nonlocal received_request
+        received_request = req
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is False
+
+    # Wrapper should pass request to handler
+    request = ListPromptsRequest(method="prompts/list", params=PaginatedRequestParams(cursor="test-cursor"))
+    await wrapper(request)
+
+    assert received_request is not None
+    assert received_request is request
+    params = getattr(received_request, "params", None)
+    assert params is not None
+    assert params.cursor == "test-cursor"
 
 
-async def request_func_different_name(req: types.ListPromptsRequest):
-    """Function with request parameter but different arg name"""
-    pass
+@pytest.mark.anyio
+async def test_typed_request_with_default_param_passes_request() -> None:
+    """Test: def foo(req: ListPromptsRequest, thing: int = 1) - should pass request through."""
+    received_request = None
+    received_thing = None
+
+    async def handler(req: ListPromptsRequest, thing: int = 1) -> list[str]:
+        nonlocal received_request, received_thing
+        received_request = req
+        received_thing = thing
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is False
+
+    # Wrapper should pass request to handler
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    await wrapper(request)
+
+    assert received_request is request
+    assert received_thing == 1  # default value
 
 
-async def request_func_with_self(self: types.ListPromptsRequest):
-    """Function with parameter named 'self' (edge case)"""
-    pass
+@pytest.mark.anyio
+async def test_optional_typed_request_with_default_none_is_deprecated() -> None:
+    """Test: def foo(thing: int = 1, req: ListPromptsRequest | None = None) - deprecated."""
+    called_without_request = False
+
+    async def handler(thing: int = 1, req: ListPromptsRequest | None = None) -> list[str]:
+        nonlocal called_without_request
+        called_without_request = True
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    # Because req has a default value (None), it's treated as deprecated
+    assert should_deprecate is True
+
+    # Wrapper should call handler without passing request
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    result = await wrapper(request)
+    assert called_without_request is True
+    assert result == ["test"]
 
 
-async def var_positional_func(*args: Any):
-    """Function with *args"""
-    pass
+@pytest.mark.anyio
+async def test_untyped_request_param_is_deprecated() -> None:
+    """Test: def foo(req) - should call without request and mark as deprecated."""
+    called = False
+
+    async def handler(req):  # type: ignore[no-untyped-def]  # pyright: ignore[reportMissingParameterType]
+        nonlocal called
+        called = True
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)  # pyright: ignore[reportUnknownArgumentType]
+
+    assert should_deprecate is True
+
+    # Wrapper should call handler without passing request, which will fail because req is required
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    # This will raise TypeError because handler expects 'req' but wrapper doesn't provide it
+    with pytest.raises(TypeError, match="missing 1 required positional argument"):
+        await wrapper(request)
 
 
-async def positional_with_var_positional_func(request: types.ListPromptsRequest, *args: Any):
-    """Function with request and *args"""
-    pass
+@pytest.mark.anyio
+async def test_any_typed_request_param_is_deprecated() -> None:
+    """Test: def foo(req: Any) - should call without request and mark as deprecated."""
+
+    async def handler(req: Any) -> list[str]:
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is True
+
+    # Wrapper should call handler without passing request, which will fail because req is required
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    # This will raise TypeError because handler expects 'req' but wrapper doesn't provide it
+    with pytest.raises(TypeError, match="missing 1 required positional argument"):
+        await wrapper(request)
 
 
-async def var_keyword_func(**kwargs: Any):
-    """Function with **kwargs"""
-    pass
+@pytest.mark.anyio
+async def test_generic_typed_request_param_is_deprecated() -> None:
+    """Test: def foo(req: Generic[T]) - should call without request and mark as deprecated."""
+
+    async def handler(req: Generic[T]) -> list[str]:  # pyright: ignore[reportGeneralTypeIssues]
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is True
+
+    # Wrapper should call handler without passing request, which will fail because req is required
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    # This will raise TypeError because handler expects 'req' but wrapper doesn't provide it
+    with pytest.raises(TypeError, match="missing 1 required positional argument"):
+        await wrapper(request)
 
 
-async def request_with_var_keyword_func(request: types.ListPromptsRequest, **kwargs: Any):
-    """Function with request and **kwargs"""
-    pass
+@pytest.mark.anyio
+async def test_wrong_typed_request_param_is_deprecated() -> None:
+    """Test: def foo(req: str) - should call without request and mark as deprecated."""
+
+    async def handler(req: str) -> list[str]:
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is True
+
+    # Wrapper should call handler without passing request, which will fail because req is required
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    # This will raise TypeError because handler expects 'req' but wrapper doesn't provide it
+    with pytest.raises(TypeError, match="missing 1 required positional argument"):
+        await wrapper(request)
 
 
-async def request_with_default(request: types.ListPromptsRequest | None = None):
-    """Function with request parameter having default value"""
-    pass
+@pytest.mark.anyio
+async def test_required_param_before_typed_request_attempts_to_pass() -> None:
+    """Test: def foo(thing: int, req: ListPromptsRequest) - attempts to pass request (will fail at runtime)."""
+    received_request = None
+
+    async def handler(thing: int, req: ListPromptsRequest) -> list[str]:
+        nonlocal received_request
+        received_request = req
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    # Not marked as deprecated because it has the correct type hint
+    assert should_deprecate is False
+
+    # Wrapper will attempt to pass request, but it will fail at runtime
+    # because 'thing' is required and has no default
+    request = ListPromptsRequest(method="prompts/list", params=None)
+
+    # This will raise TypeError because 'thing' is missing
+    with pytest.raises(TypeError, match="missing 1 required positional argument: 'thing'"):
+        await wrapper(request)
 
 
-async def keyword_only_with_defaults(*, request: types.ListPromptsRequest | None = None):
-    """Function with keyword-only request with default"""
-    pass
+@pytest.mark.anyio
+async def test_positional_only_param_with_correct_type() -> None:
+    """Test: def foo(req: ListPromptsRequest, /) - should pass request through."""
+    received_request = None
+
+    async def handler(req: ListPromptsRequest, /) -> list[str]:
+        nonlocal received_request
+        received_request = req
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is False
+
+    # Wrapper should pass request to handler
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    await wrapper(request)
+
+    assert received_request is request
 
 
-async def keyword_only_multiple_all_defaults(*, a: str = "test", b: int = 42):
-    """Function with multiple keyword-only params all with defaults"""
-    pass
+def test_positional_only_param_with_default_is_deprecated() -> None:
+    """Test: def foo(req: ListPromptsRequest = None, /) - deprecated due to default value."""
+
+    async def handler(req: ListPromptsRequest = None, /) -> list[str]:  # type: ignore[assignment]
+        return ["test"]
+
+    _wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    # Has default value, so treated as deprecated
+    assert should_deprecate is True
 
 
-async def mixed_positional_and_keyword(request: types.ListPromptsRequest, *, extra: str = "test"):
-    """Function with positional and keyword-only params"""
-    pass
+@pytest.mark.anyio
+async def test_keyword_only_param_with_correct_type() -> None:
+    """Test: def foo(*, req: ListPromptsRequest) - should pass request through."""
+    received_request = None
+
+    async def handler(*, req: ListPromptsRequest) -> list[str]:
+        nonlocal received_request
+        received_request = req
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is False
+
+    # Wrapper should pass request to handler with keyword argument
+    request = ListPromptsRequest(method="prompts/list", params=None)
+    await wrapper(request)
+
+    assert received_request is request
 
 
-@pytest.mark.parametrize(
-    "callable_obj,expected,description",
-    [
-        # Regular functions
-        (no_request_func, False, "function without parameters"),
-        (request_func, True, "function with request parameter"),
-        (request_func_different_name, True, "function with request (different param name)"),
-        (request_func_with_self, True, "function with param named 'self'"),
-        # Instance methods
-        (MyClass().no_request_method, False, "instance method without request"),
-        (MyClass().no_request_method_bad_self_name, False, "instance method without request (bad self name)"),
-        (MyClass().request_method, True, "instance method with request"),
-        (MyClass().request_method_bad_self_name, True, "instance method with request (bad self name)"),
-        # Class methods
-        (MyClass.no_request_class_method, False, "class method without request"),
-        (MyClass.no_request_class_method_bad_cls_name, False, "class method without request (bad cls name)"),
-        (MyClass.request_class_method, True, "class method with request"),
-        (MyClass.request_class_method_bad_cls_name, True, "class method with request (bad cls name)"),
-        # Static methods
-        (MyClass.no_request_static_method, False, "static method without request"),
-        (MyClass.request_static_method, True, "static method with request"),
-        (MyClass.request_static_method_bad_arg_name, True, "static method with request (bad arg name)"),
-        # Variadic parameters
-        (var_positional_func, True, "function with *args"),
-        (positional_with_var_positional_func, True, "function with request and *args"),
-        (var_keyword_func, False, "function with **kwargs"),
-        (request_with_var_keyword_func, True, "function with request and **kwargs"),
-        # Edge cases
-        (request_with_default, True, "function with request having default value"),
-        # Keyword-only parameters
-        (keyword_only_with_defaults, False, "keyword-only with default (can call with no args)"),
-        (keyword_only_multiple_all_defaults, False, "multiple keyword-only all with defaults"),
-        (mixed_positional_and_keyword, True, "mixed positional and keyword-only params"),
-    ],
-    ids=lambda x: x if isinstance(x, str) else "",
-)
-def test_accepts_single_positional_arg(callable_obj: Callable[..., Any], expected: bool, description: str):
-    """Test that `accepts_single_positional_arg` correctly identifies functions that accept a single argument.
+@pytest.mark.anyio
+async def test_different_request_types() -> None:
+    """Test that wrapper works with different request types."""
+    # Test with ListResourcesRequest
+    received_request = None
 
-    `accepts_single_positional_arg` is currently only used in the case of
-    the lowlevel server code checking whether a handler accepts a request
-    argument, so the test cases reference a "request" param/arg.
+    async def handler(req: ListResourcesRequest) -> list[str]:
+        nonlocal received_request
+        received_request = req
+        return ["test"]
 
-    The function should return True if the callable can potentially accept a positional
-    request argument. Returns False if:
-    - No parameters at all
-    - Only keyword-only parameters that ALL have defaults (can call with no args)
-    - Only **kwargs parameter (can't accept positional arguments)
-    """
-    assert accepts_single_positional_arg(callable_obj) == expected, f"Failed for {description}"
+    wrapper, should_deprecate = create_call_wrapper(handler, ListResourcesRequest)
+
+    assert should_deprecate is False
+
+    request = ListResourcesRequest(method="resources/list", params=None)
+    await wrapper(request)
+
+    assert received_request is request
+
+    # Test with ListToolsRequest
+    received_request = None
+
+    async def handler2(req: ListToolsRequest) -> list[str]:
+        nonlocal received_request
+        received_request = req
+        return ["test"]
+
+    wrapper2, should_deprecate2 = create_call_wrapper(handler2, ListToolsRequest)
+
+    assert should_deprecate2 is False
+
+    request2 = ListToolsRequest(method="tools/list", params=None)
+    await wrapper2(request2)
+
+    assert received_request is request2
+
+
+def test_lambda_without_annotations() -> None:
+    """Test that lambda functions work correctly."""
+    # Lambda without type hints - should be deprecated
+    handler = lambda: ["test"]  # noqa: E731
+
+    _wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is True
+
+
+def test_function_without_type_hints_resolvable() -> None:
+    """Test functions where type hints can't be resolved."""
+
+    def handler(req):  # type: ignore[no-untyped-def]  # pyright: ignore[reportMissingParameterType]
+        return ["test"]
+
+    # Remove type hints to simulate resolution failure
+    handler.__annotations__ = {}
+
+    _, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)  # pyright: ignore[reportUnknownArgumentType]
+
+    # Should default to deprecated when can't determine type
+    assert should_deprecate is True
+
+
+@pytest.mark.anyio
+async def test_mixed_params_with_typed_request() -> None:
+    """Test: def foo(a: str, req: ListPromptsRequest, b: int = 5) - attempts to pass request."""
+
+    async def handler(a: str, req: ListPromptsRequest, b: int = 5) -> list[str]:
+        return ["test"]
+
+    wrapper, should_deprecate = create_call_wrapper(handler, ListPromptsRequest)
+
+    assert should_deprecate is False
+
+    # Will fail at runtime due to missing 'a'
+    request = ListPromptsRequest(method="prompts/list", params=None)
+
+    with pytest.raises(TypeError, match="missing 1 required positional argument: 'a'"):
+        await wrapper(request)
