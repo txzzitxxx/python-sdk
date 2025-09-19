@@ -236,11 +236,7 @@ class Server(Generic[LifespanResultT, RequestT]):
         ):
             logger.debug("Registering handler for PromptListRequest")
 
-            # Create wrapper that knows how to call func with the request
-            wrapper, _ = create_call_wrapper(func, types.ListPromptsRequest)
-
-            # if should_deprecate:
-            #     issue_deprecation_warning(func, types.ListPromptsRequest)
+            wrapper = create_call_wrapper(func, types.ListPromptsRequest)
 
             async def handler(req: types.ListPromptsRequest):
                 result = await wrapper(req)
@@ -278,12 +274,7 @@ class Server(Generic[LifespanResultT, RequestT]):
         ):
             logger.debug("Registering handler for ListResourcesRequest")
 
-            # Create wrapper that knows how to call func with the request
-            wrapper, _ = create_call_wrapper(func, types.ListResourcesRequest)
-
-            # TODO: Decide whether we want this sort of deprecation in a later PR
-            # if should_deprecate:
-            #     issue_deprecation_warning(func, types.ListResourcesRequest)
+            wrapper = create_call_wrapper(func, types.ListResourcesRequest)
 
             async def handler(req: types.ListResourcesRequest):
                 result = await wrapper(req)
@@ -416,12 +407,7 @@ class Server(Generic[LifespanResultT, RequestT]):
         ):
             logger.debug("Registering handler for ListToolsRequest")
 
-            # Create wrapper that knows how to call func with the request
-            wrapper, _ = create_call_wrapper(func, types.ListToolsRequest)
-
-            # TODO: Decide whether we want this sort of deprecation in a later PR
-            # if should_deprecate:
-            #     issue_deprecation_warning(func, types.ListToolsRequest)
+            wrapper = create_call_wrapper(func, types.ListToolsRequest)
 
             async def handler(req: types.ListToolsRequest):
                 result = await wrapper(req)
